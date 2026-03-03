@@ -1,19 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { 
   FileText, 
   Printer,
   ChevronRight,
   ChevronLeft,
-  Info
+  Info,
+  Loader2
 } from "lucide-react";
 import DashboardLayout from "@/app/components/DashboardLayout";
 import Link from "next/link";
 
-export default function DokumenAkreditasiPage() {
+// 1. KOMPONEN ISI (Bisa aman menggunakan useSearchParams di sini)
+function DokumenContent() {
+  // Disiapkan untuk nanti jika Anda ingin mengambil parameter URL
+  const searchParams = useSearchParams();
+  const prodiId = searchParams.get("prodiId");
+
   return (
-    <DashboardLayout>
+    <>
       <style jsx global>{`
         @media print {
           body * {
@@ -748,6 +755,23 @@ export default function DokumenAkreditasiPage() {
 
         </div>
       </div>
+    </>
+  );
+}
+
+// 2. KOMPONEN BUNGKUSAN (Wrapper utama)
+export default function DokumenAkreditasiPage() {
+  return (
+    // DashboardLayout diletakkan di luar Suspense agar sidebar tidak ikut hilang/loading
+    <DashboardLayout>
+      <Suspense fallback={
+        <div className="flex flex-col items-center justify-center min-h-[70vh] gap-3">
+          <Loader2 className="animate-spin text-indigo-600" size={40} />
+          <p className="text-gray-500 font-medium">Mempersiapkan dokumen...</p>
+        </div>
+      }>
+        <DokumenContent />
+      </Suspense>
     </DashboardLayout>
   );
 }
