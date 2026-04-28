@@ -188,14 +188,15 @@ model CPMK {
 }
 
 model SubCpmk {
-  id            Int            @id @default(autoincrement())
-  deskripsi     String
-  cpmk_id       Int
-  ik_id         Int
-  kode_sub_cpmk String
-  cpmk          CPMK           @relation(fields: [cpmk_id], references: [id], onDelete: Cascade)
-  ik            Ik             @relation(fields: [ik_id], references: [id], onDelete: Cascade)
-  rps_pertemuan RPSPertemuan[] @relation("CPMKToPertemuan")
+  id             Int             @id @default(autoincrement())
+  deskripsi      String
+  cpmk_id        Int
+  ik_id          Int?
+  kode_sub_cpmk  String
+  komponen_nilai KomponenNilai[]
+  cpmk           CPMK            @relation(fields: [cpmk_id], references: [id], onDelete: Cascade)
+  ik             Ik?             @relation(fields: [ik_id], references: [id], onDelete: Cascade)
+  rps_pertemuan  RPSPertemuan[]  @relation("SubCPMKToPertemuan")
 
   @@map("sub_cpmk")
 }
@@ -212,19 +213,21 @@ model RPSPertemuan {
   rps_id              Int
   bobot_assesment     Float
   rps                 RPS       @relation(fields: [rps_id], references: [id], onDelete: Cascade)
-  sub_cpmk            SubCpmk[] @relation("CPMKToPertemuan")
+  sub_cpmk            SubCpmk[] @relation("SubCPMKToPertemuan")
 
   @@map("rps_pertemuan")
 }
 
 model KomponenNilai {
-  id          Int     @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   nama        String
   kelas_id    Int
   bobot_nilai Float
-  cpmk_id     Int
-  cpmk        CPMK    @relation(fields: [cpmk_id], references: [id], onDelete: Cascade)
-  kelas       Kelas   @relation(fields: [kelas_id], references: [id], onDelete: Cascade)
+  cpmk_id     Int?
+  sub_cpmk_id Int?
+  cpmk        CPMK?    @relation(fields: [cpmk_id], references: [id], onDelete: Cascade)
+  kelas       Kelas    @relation(fields: [kelas_id], references: [id], onDelete: Cascade)
+  sub_cpmk    SubCpmk? @relation(fields: [sub_cpmk_id], references: [id], onDelete: Cascade)
   nilai       Nilai[]
 
   @@map("komponen_nilai")

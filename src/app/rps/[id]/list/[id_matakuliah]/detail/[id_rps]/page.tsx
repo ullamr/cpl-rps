@@ -57,7 +57,9 @@ interface PertemuanRow {
   pekan_sampai: number;
   sub_cpmk_id: string;
   indikator: string;
-  teknik_kriteria: string;
+  teknik_penilaian: string;
+  kriteria: string;
+  teknik_kriteria?: string;
   luring_bentuk: string;
   luring_metode: string;
   luring_waktu: string;
@@ -83,7 +85,12 @@ interface CPMK {
   bobot_to_cpl: number;
   kode_ik?: string;
   ik?: Array<{ kode_ik: string; deskripsi: string }>;
-  sub_cpmk?: Array<{ kode: string; deskripsi: string }>;
+  sub_cpmk?: Array<{
+    id: number;
+    kode_sub_cpmk: string;
+    kode?: string;
+    deskripsi: string;
+  }>;
 }
 interface CPLItem {
   kode: string;
@@ -116,6 +123,9 @@ interface MKSyaratItem {
   nama: string;
 }
 interface RPSData {
+  pustaka_pendukung: string;
+  deskripsi: string;
+  pustaka_utama: string;
   id: number;
   nama_penyusun: string;
   nama_koordinator: string;
@@ -134,7 +144,7 @@ interface RPSData {
   cpl?: CPLItem[];
   pertemuan: any[];
   available_iks: any[];
-  matakuliah: { nama: string; kode_mk: string; sks: string };
+  matakuliah: { nama: string; kode_mk: string; sks: string; cpl?: any[] };
 }
 
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -698,14 +708,29 @@ function TimPengajaranModal({
   timList,
   onAdd,
   onDelete,
+  dosenList, // Tambahkan props ini
 }: {
   isOpen: boolean;
   onClose: () => void;
   timList: TimDosenItem[];
   onAdd: (nama: string) => void;
   onDelete: (id: number) => void;
+  dosenList: any[]; // List dosen hasil fetch
 }) {
-  const [nama, setNama] = useState("");
+  const [selectedDosen, setSelectedDosen] = useState("");
+
+  const handleAddClick = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedDosen) {
+      // Cari objek dosen berdasarkan nama atau ID
+      const dosen = dosenList.find((d) => d.nama === selectedDosen);
+      if (dosen) {
+        onAdd(dosen.nama);
+        setSelectedDosen(""); // Reset dropdown setelah tambah
+      }
+    }
+  };
+
   return (
     <Modal
       isOpen={isOpen}
@@ -723,28 +748,28 @@ function TimPengajaranModal({
         </div>
       }>
       <div className="space-y-4">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (nama.trim()) {
-              onAdd(nama.trim());
-              setNama("");
-            }
-          }}
-          className="flex gap-2">
-          <input
-            value={nama}
-            onChange={(e) => setNama(e.target.value)}
-            className={`${inputCls} flex-1`}
-            placeholder="Nama dosen pengampu..."
-            autoFocus
-          />
+        {/* DROPDOWN PILIH DOSEN */}
+        <form onSubmit={handleAddClick} className="flex gap-2">
+          <select
+            value={selectedDosen}
+            onChange={(e) => setSelectedDosen(e.target.value)}
+            className={`${inputCls} flex-1 text-sm`}>
+            <option value="">-- Pilih Dosen Pengampu --</option>
+            {dosenList.map((dosen) => (
+              <option key={dosen.id} value={dosen.nama}>
+                {dosen.nama}
+              </option>
+            ))}
+          </select>
           <button
             type="submit"
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold flex items-center gap-1.5">
+            disabled={!selectedDosen}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white rounded-xl text-sm font-bold flex items-center gap-1.5 whitespace-nowrap">
             <Plus size={14} /> Tambah
           </button>
         </form>
+
+        {/* LIST DOSEN YANG SUDAH TERPILIH */}
         {timList.length > 0 ? (
           <ul className="space-y-2 max-h-64 overflow-y-auto">
             {timList.map((d, idx) => (
@@ -762,7 +787,7 @@ function TimPengajaranModal({
                 <button
                   title="Hapus"
                   onClick={() => onDelete(d.id)}
-                  className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg">
+                  className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors">
                   <Trash2 size={15} />
                 </button>
               </li>
@@ -777,7 +802,6 @@ function TimPengajaranModal({
     </Modal>
   );
 }
-
 // ==========================================
 // MODAL: MK SYARAT
 // ==========================================
@@ -888,38 +912,65 @@ function SubCpmkModal({
   cpmkList: CPMK[];
   subList: SubCPMKLocal[];
   editingItem: SubCPMKLocal | null;
-  onAdd: (d: SubCpmkFormState) => void;
-  onUpdate: (id: number, d: SubCpmkFormState) => void;
+  onAdd: (d: any) => void;
+  onUpdate: (id: number, d: any) => void;
 }) {
-  const [form, setForm] = useState<SubCpmkFormState>({
-    cpmk_id: cpmkList[0]?.id || 0,
+  const [form, setForm] = useState<any>({
+    cpmk_id: 0,
+    ik_id: 0,
     deskripsi: "",
     bobot: 0,
   });
-  useEffect(() => {
-    if (isOpen) {
-      if (editingItem)
-        setForm({
-          cpmk_id: editingItem.cpmk_id,
-          deskripsi: editingItem.deskripsi,
-          bobot: editingItem.bobot,
-        });
-      else setForm({ cpmk_id: cpmkList[0]?.id || 0, deskripsi: "", bobot: 0 });
-    }
-  }, [isOpen, editingItem, cpmkList]);
 
+  // 1. Ambil daftar IK hanya dari CPMK yang sedang dipilih
+  const availableIksForSelectedCpmk = useMemo(() => {
+    const selected = cpmkList.find((c) => c.id === Number(form.cpmk_id));
+    return selected?.ik || [];
+  }, [form.cpmk_id, cpmkList]);
+
+  // 2. Fungsi Generate Kode Otomatis (Jangan Dihapus)
   const autoKode = (parentId: number) => {
     const parent = cpmkList.find((c) => c.id === Number(parentId));
     if (!parent) return "Sub-CPMK-?";
+    // Hilangkan tulisan "CPMK" dari kode parent jika ada
     const base = parent.kode_cpmk.replace(/^CPMK[-.]?/i, "");
+    // Hitung jumlah sub yang sudah ada di parent tersebut
     const count = subList.filter((s) => s.cpmk_id === Number(parentId)).length;
     return `Sub-CPMK-${base}.${editingItem ? "—" : count + 1}`;
   };
 
+  useEffect(() => {
+    if (isOpen) {
+      if (editingItem) {
+        setForm({
+          cpmk_id: editingItem.cpmk_id,
+          ik_id: (editingItem as any).ik_id || 0,
+          deskripsi: editingItem.deskripsi,
+          bobot: editingItem.bobot,
+        });
+      } else {
+        setForm({
+          cpmk_id: cpmkList[0]?.id || 0,
+          ik_id: 0,
+          deskripsi: "",
+          bobot: 0,
+        });
+      }
+    }
+  }, [isOpen, editingItem, cpmkList]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingItem) onUpdate(editingItem.id, form);
-    else onAdd(form);
+    if (!form.cpmk_id) return alert("Pilih CPMK terlebih dahulu");
+
+    // Gabungkan kode otomatis ke dalam data yang akan disimpan
+    const finalData = {
+      ...form,
+      kode_sub_cpmk: autoKode(form.cpmk_id),
+    };
+
+    if (editingItem) onUpdate(editingItem.id, finalData);
+    else onAdd(finalData);
     onClose();
   };
 
@@ -936,13 +987,17 @@ function SubCpmkModal({
           confirmLabel={editingItem ? "Update" : "Tambah"}
         />
       }>
-      <form id="sub-cpmk-form" onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      <form id="sub-cpmk-form" onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField label="Parent CPMK" required>
             <select
               value={form.cpmk_id}
               onChange={(e) =>
-                setForm((p) => ({ ...p, cpmk_id: Number(e.target.value) }))
+                setForm((p: any) => ({
+                  ...p,
+                  cpmk_id: Number(e.target.value),
+                  ik_id: 0,
+                }))
               }
               className={inputCls}>
               <option value={0}>-- Pilih CPMK --</option>
@@ -953,6 +1008,8 @@ function SubCpmkModal({
               ))}
             </select>
           </FormField>
+
+          {/* FIELD KODE OTOMATIS (TETAP ADA) */}
           <FormField label="Kode Sub-CPMK (auto)">
             <input
               readOnly
@@ -960,24 +1017,39 @@ function SubCpmkModal({
               className={`${inputCls} bg-gray-100 text-gray-500 cursor-not-allowed`}
             />
           </FormField>
-          <FormField label="Bobot (%)">
-            <input
-              type="number"
-              min={0}
-              max={100}
-              value={form.bobot}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, bobot: Number(e.target.value) }))
-              }
-              className={inputCls}
-            />
-          </FormField>
         </div>
+
+        {/* FIELD PILIH IK (HASIL DARI CPMK DI ATAS) */}
+        <FormField label="Indikator Kinerja (IK) Terkait" required>
+          <select
+            value={form.ik_id}
+            disabled={availableIksForSelectedCpmk.length === 0}
+            onChange={(e) =>
+              setForm((p: any) => ({ ...p, ik_id: Number(e.target.value) }))
+            }
+            className={clsx(
+              inputCls,
+              availableIksForSelectedCpmk.length === 0 &&
+                "bg-gray-50 opacity-60",
+            )}>
+            <option value={0}>
+              {availableIksForSelectedCpmk.length > 0
+                ? "-- Pilih IK yang berkaitan --"
+                : "CPMK belum memiliki IK"}
+            </option>
+            {availableIksForSelectedCpmk.map((ik: any) => (
+              <option key={ik.id} value={ik.id}>
+                {ik.kode_ik} - {ik.deskripsi.substring(0, 70)}...
+              </option>
+            ))}
+          </select>
+        </FormField>
+
         <FormField label="Deskripsi Sub-CPMK" required>
           <textarea
             value={form.deskripsi}
             onChange={(e) =>
-              setForm((p) => ({ ...p, deskripsi: e.target.value }))
+              setForm((p: any) => ({ ...p, deskripsi: e.target.value }))
             }
             rows={3}
             className={textareaCls}
@@ -998,7 +1070,8 @@ const emptyPertemuan = (nextPekan = 1): PertemuanRow => ({
   pekan_sampai: nextPekan,
   sub_cpmk_id: "",
   indikator: "",
-  teknik_kriteria: "",
+  teknik_penilaian: "",
+  kriteria: "",
   luring_bentuk: "",
   luring_metode: "",
   luring_waktu: "",
@@ -1024,12 +1097,57 @@ function PertemuanModal({
   onSave: (form: PertemuanRow) => void;
   isSaving: boolean;
 }) {
-  const [form, setForm] = useState<PertemuanRow>(initial ?? emptyPertemuan());
+  const [form, setForm] = useState<PertemuanRow>(
+    initial ?? { ...emptyPertemuan(), teknik_penilaian: "", kriteria: "" },
+  );
   useEffect(() => {
-    if (initial) setForm(initial);
+    if (initial) {
+      const rawData = initial.indikator || "";
+      if (rawData.includes("|")) {
+        const parts = rawData.split("|").map((p) => p.trim());
+        setForm({
+          ...initial,
+          teknik_penilaian: parts[0] || "",
+          kriteria: parts[1] || "",
+          indikator: parts[2] || "", // Teks indikator asli
+        });
+      } else {
+        setForm(initial);
+      }
+    }
   }, [initial]);
   const set = (k: keyof PertemuanRow, v: any) =>
     setForm((f) => ({ ...f, [k]: v }));
+
+  const OPSI_PENILAIAN = ["Tes", "Non-Tes"];
+
+  const OPSI_BENTUK = [
+    "Kuliah",
+    "Responsi",
+    "Tutorial",
+    "Seminar atau yang setara",
+    "Praktikum",
+    "Praktik Studio",
+    "Praktik Bengkel",
+    "Praktik Lapangan",
+    "Penelitian",
+    "Pengabdian Kepada Masyarakat",
+  ];
+
+  const OPSI_METODE = [
+    "Small Group Discussion",
+    "Role-Play & Simulation",
+    "Discovery Learning",
+    "Self-Directed Learning",
+    "Cooperative Learning",
+    "Collaborative Learning",
+    "Contextual Learning",
+    "Project Based Learning",
+  ];
+
+  const OPSI_KRITERIA = ["Kriteria Formative", "Kriteria Summative"];
+
+  const OPSI_INDIKATOR = ["Summative", "Formative"];
 
   return (
     <Modal
@@ -1050,7 +1168,19 @@ function PertemuanModal({
         id="pertemuan-form"
         onSubmit={(e) => {
           e.preventDefault();
-          onSave(form);
+
+          // SAPU BERSIH: Gabungkan Teknik | Kriteria | Indikator
+          const teknik = form.teknik_penilaian || "-";
+          const kriteria = form.kriteria || "-";
+          const indikatorAsli = form.indikator || "-";
+
+          const combinedData = `${teknik} | ${kriteria} | ${indikatorAsli}`;
+
+          // Kirim data yang sudah dijahit ke fungsi onSave di page.tsx
+          onSave({
+            ...form,
+            indikator: combinedData,
+          });
         }}
         className="space-y-5">
         {/* Pekan & Bobot */}
@@ -1100,29 +1230,54 @@ function PertemuanModal({
             ))}
           </select>
         </FormField>
+
         {/* Penilaian */}
         <div className="border-2 border-indigo-100 rounded-xl overflow-hidden">
           <div className="bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-800 uppercase tracking-wide border-b border-indigo-100">
             Penilaian (Assessment)
           </div>
-          <div className="p-4 grid grid-cols-2 gap-4">
-            <FormField label="Indikator">
-              <textarea
-                rows={3}
+          <div className="p-4 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label="Teknik Penilaian">
+                <select
+                  value={form.teknik_penilaian}
+                  onChange={(e) => set("teknik_penilaian", e.target.value)}
+                  className={inputCls}>
+                  <option value="">-- Pilih Teknik --</option>
+                  {OPSI_PENILAIAN.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField label="Kriteria Penilaian">
+                <select
+                  value={form.kriteria}
+                  onChange={(e) => set("kriteria", e.target.value)}
+                  className={inputCls}>
+                  <option value="">-- Pilih Kriteria --</option>
+                  {OPSI_KRITERIA.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+            </div>
+
+            <FormField label="Indikator Pencapaian">
+              <select
                 value={form.indikator}
                 onChange={(e) => set("indikator", e.target.value)}
-                placeholder="Indikator pencapaian..."
-                className={textareaCls}
-              />
-            </FormField>
-            <FormField label="Teknik & Kriteria">
-              <textarea
-                rows={3}
-                value={form.teknik_kriteria}
-                onChange={(e) => set("teknik_kriteria", e.target.value)}
-                placeholder="Teknik & kriteria penilaian..."
-                className={textareaCls}
-              />
+                className={inputCls}>
+                <option value="">-- Pilih Indikator --</option>
+                {OPSI_INDIKATOR.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
             </FormField>
           </div>
         </div>
@@ -1133,20 +1288,32 @@ function PertemuanModal({
           </div>
           <div className="p-4 grid grid-cols-3 gap-4">
             <FormField label="Bentuk">
-              <input
+              {/* BERUBAH MENJADI SELECT */}
+              <select
                 value={form.luring_bentuk}
                 onChange={(e) => set("luring_bentuk", e.target.value)}
-                placeholder="mis. Kuliah, Praktikum"
-                className={inputCls}
-              />
+                className={inputCls}>
+                <option value="">-- Pilih Bentuk --</option>
+                {OPSI_BENTUK.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
             </FormField>
             <FormField label="Metode">
-              <input
+              {/* BERUBAH MENJADI SELECT */}
+              <select
                 value={form.luring_metode}
                 onChange={(e) => set("luring_metode", e.target.value)}
-                placeholder="mis. Ceramah, PBL"
-                className={inputCls}
-              />
+                className={inputCls}>
+                <option value="">-- Pilih Metode --</option>
+                {OPSI_METODE.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
             </FormField>
             <FormField label="Estimasi Waktu">
               <input
@@ -1165,20 +1332,32 @@ function PertemuanModal({
           </div>
           <div className="p-4 grid grid-cols-3 gap-4">
             <FormField label="Bentuk">
-              <input
+              {/* BERUBAH MENJADI SELECT */}
+              <select
                 value={form.daring_bentuk}
                 onChange={(e) => set("daring_bentuk", e.target.value)}
-                placeholder="mis. E-Learning"
-                className={inputCls}
-              />
+                className={inputCls}>
+                <option value="">-- Pilih Bentuk --</option>
+                {OPSI_BENTUK.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
             </FormField>
             <FormField label="Metode">
-              <input
+              {/* BERUBAH MENJADI SELECT */}
+              <select
                 value={form.daring_metode}
                 onChange={(e) => set("daring_metode", e.target.value)}
-                placeholder="mis. Flipped Classroom"
-                className={inputCls}
-              />
+                className={inputCls}>
+                <option value="">-- Pilih Metode --</option>
+                {OPSI_METODE.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
             </FormField>
             <FormField label="Estimasi Waktu">
               <input
@@ -1200,6 +1379,116 @@ function PertemuanModal({
             className={textareaCls}
           />
         </FormField>
+      </form>
+    </Modal>
+  );
+}
+
+// ==========================================
+// MODAL: ASSESSMENT
+// ==========================================
+function AssessmentModal({
+  isOpen,
+  onClose,
+  subCpmkList,
+  editingItem,
+  onAdd,
+  onUpdate,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  subCpmkList: SubCPMKLocal[];
+  editingItem: any | null;
+  onAdd: (d: any) => void;
+  onUpdate: (id: any, d: any) => void;
+}) {
+  const [form, setForm] = useState({
+    sub_cpmk_id: "",
+    assessment_type: "formative",
+    bobot: 0,
+  });
+
+  useEffect(() => {
+    if (isOpen) {
+      if (editingItem) {
+        setForm({
+          sub_cpmk_id: editingItem.sub_cpmk_id,
+          assessment_type: editingItem.assessment_type,
+          bobot: editingItem.bobot,
+        });
+      } else {
+        setForm({ sub_cpmk_id: "", assessment_type: "formative", bobot: 0 });
+      }
+    }
+  }, [isOpen, editingItem]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.sub_cpmk_id) {
+      alert("Pilih Sub-CPMK");
+      return;
+    }
+    if (editingItem) onUpdate(editingItem.id, form);
+    else onAdd(form);
+    onClose();
+  };
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={editingItem ? "Edit Assessment" : "Tambah Assessment"}
+      icon={<ClipboardList size={18} />}
+      footer={
+        <ModalFooter
+          onCancel={onClose}
+          formId="assessment-form"
+          confirmLabel={editingItem ? "Update" : "Tambah"}
+        />
+      }>
+      <form id="assessment-form" onSubmit={handleSubmit}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <FormField label="Sub-CPMK" required>
+            <select
+              value={form.sub_cpmk_id}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, sub_cpmk_id: e.target.value }))
+              }
+              className={inputCls}>
+              <option value="">-- Pilih Sub-CPMK --</option>
+              {subCpmkList.map((s) => (
+                <option key={s.id} value={String(s.id)}>
+                  {s.kode} — {s.deskripsi.substring(0, 40)}...
+                </option>
+              ))}
+            </select>
+          </FormField>
+
+          <FormField label="Tipe Assessment" required>
+            <select
+              value={form.assessment_type}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, assessment_type: e.target.value }))
+              }
+              className={inputCls}>
+              <option value="formative">Formative</option>
+              <option value="summative">Summative</option>
+            </select>
+          </FormField>
+
+          <FormField label="Bobot (%)" required>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={form.bobot}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, bobot: Number(e.target.value) }))
+              }
+              className={inputCls}
+            />
+          </FormField>
+        </div>
       </form>
     </Modal>
   );
@@ -1289,7 +1578,10 @@ function PertemuanTable({
   const totalBobot = rows.reduce((s, r) => s + Number(r.bobot || 0), 0);
   const isOver = totalBobot > 100,
     isDone = totalBobot === 100;
-  const findSub = (id: string) => subCpmkList.find((s) => String(s.id) === id);
+  const findSub = (id: string | number) => {
+    if (!id) return null;
+    return subCpmkList.find((s) => String(s.id) === id);
+  };
 
   const openAdd = () => {
     const next =
@@ -1477,7 +1769,31 @@ function PertemuanTable({
                         )}
                       </td>
                       <td className={tdCls}>
-                        {row.teknik_kriteria || (
+                        {row.db_id ? (
+                          <div className="space-y-1">
+                            {/* Jika data mengandung pemisah '|' kita pecah, jika tidak tampilkan apa adanya */}
+                            {row.indikator.includes("|") ? (
+                              <>
+                                <p>
+                                  <span className="font-bold text-indigo-700">
+                                    Teknik:
+                                  </span>{" "}
+                                  {row.indikator.split("|")[0]}
+                                </p>
+                                <p>
+                                  <span className="font-bold text-indigo-700">
+                                    Kriteria:
+                                  </span>{" "}
+                                  {row.indikator.split("|")[1]}
+                                </p>
+                              </>
+                            ) : (
+                              <span className="text-gray-400 italic">
+                                Klik edit untuk melengkapi
+                              </span>
+                            )}
+                          </div>
+                        ) : (
                           <span className="text-gray-300 italic">—</span>
                         )}
                       </td>
@@ -1733,6 +2049,8 @@ export default function DetailRPSPage({
   });
   const [localCpmk, setLocalCpmk] = useState<CPMK[]>([]);
   const [localSubCpmk, setLocalSubCpmk] = useState<SubCPMKLocal[]>([]);
+  const [localCpl, setLocalCpl] = useState<CPLItem[]>([]);
+  const [localIk, setLocalIk] = useState<any[]>([]);
   const [deskripsi, setDeskripsi] = useState<DeskripsiLocal>({
     deskripsi_mk: "",
     materi_pembelajaran: "",
@@ -1741,6 +2059,9 @@ export default function DetailRPSPage({
   const [timPengajaran, setTimPengajaran] = useState<TimDosenItem[]>([]);
   const [mkSyarat, setMkSyarat] = useState<MKSyaratItem[]>([]);
   const [pertemuanRows, setPertemuanRows] = useState<PertemuanRow[]>([]);
+  const [assessments, setAssessments] = useState<any[]>([]);
+  const [showAssessmentModal, setShowAssessmentModal] = useState(false);
+  const [editingAssessment, setEditingAssessment] = useState<any>(null);
 
   const showSuccess = useCallback((msg: string) => {
     setSuccessMsg(msg);
@@ -1764,6 +2085,8 @@ export default function DetailRPSPage({
 
   useEffect(() => {
     if (!rpsData) return;
+
+    // 1. INFO DASAR
     setInfoRPS({
       nama_mk: rpsData.matakuliah.nama,
       kode_mk: rpsData.matakuliah.kode_mk,
@@ -1774,6 +2097,8 @@ export default function DetailRPSPage({
         ? rpsData.tgl_penyusunan.split("T")[0]
         : "",
     });
+
+    // 2. OTORISASI
     const parsePenyusun = (raw: any): string => {
       try {
         if (typeof raw === "string" && raw.startsWith("["))
@@ -1788,34 +2113,108 @@ export default function DetailRPSPage({
       koordinator_mk: rpsData.nama_koordinator || "",
       ketua_prodi: rpsData.nama_kaprodi || "",
     });
-    setLocalCpmk(
-      rpsData.cpmk.map((c) => ({ ...c, kode_ik: c.ik?.[0]?.kode_ik || "" })),
-    );
+
+    // 3. SET CPL (Dari relasi Mata Kuliah)
+    if (rpsData.matakuliah?.cpl && Array.isArray(rpsData.matakuliah.cpl)) {
+      setLocalCpl(
+        rpsData.matakuliah.cpl.map((c: any) => ({
+          kode: c.kode_cpl,
+          deskripsi: c.deskripsi,
+        })),
+      );
+    } else {
+      setLocalCpl([]);
+    }
+
+    // 4. SET INDIKATOR KINERJA (Data centang biru dari Matriks)
+    // FIX: Gunakan 'iks' (sesuai API) bukan 'ik'
+    if (rpsData.available_iks && Array.isArray(rpsData.available_iks)) {
+      // A. Olah data IK
+      const mappedIks = rpsData.available_iks.map((ik: any) => ({
+        id: ik.id,
+        kode: ik.kode,
+        deskripsi: ik.deskripsi || "",
+        cpl_list: [ik.cpl_kode],
+      }));
+      setLocalIk(mappedIks);
+
+      // B. Ambil CPL Unik berdasarkan IK yang muncul
+      const uniqueCplCodes = Array.from(
+        new Set(mappedIks.map((ik) => ik.cpl_list[0])),
+      );
+      const mappedCpls = uniqueCplCodes.map((code) => {
+        // Cari deskripsi asli dari data rpsData jika ada
+        const originalCpl = rpsData.matakuliah?.cpl?.find(
+          (c: any) => c.kode_cpl === code,
+        );
+        return {
+          kode: code,
+          deskripsi:
+            originalCpl?.deskripsi || "Capaian Pembelajaran Lulusan terkait",
+        };
+      });
+      setLocalCpl(mappedCpls);
+    } else {
+      setLocalIk([]);
+      setLocalCpl([]);
+    }
+
+    // 5. SET CPMK (Hubungan CPMK ke IK)
+    if (rpsData.cpmk && Array.isArray(rpsData.cpmk)) {
+      setLocalCpmk(
+        rpsData.cpmk.map((c: any) => ({
+          ...c,
+          ik: c.ik || [],
+          kode_ik: c.ik?.[0]?.kode_ik || "",
+        })),
+      );
+    }
+
+    // 6. SUB-CPMK
     setLocalSubCpmk(
       rpsData.cpmk.flatMap((c) =>
-        (c.sub_cpmk || []).map((sc, i) => ({
-          id: c.id * 1000 + i,
+        (c.sub_cpmk || []).map((sc) => ({
+          id: sc.id,
           cpmk_id: c.id,
-          kode: sc.kode,
+          kode: sc.kode_sub_cpmk || sc.kode || "SUB-CPMK",
           deskripsi: sc.deskripsi,
           bobot: 0,
         })),
       ),
     );
+
+    // 7. DESKRIPSI & REFERENSI
     setDeskripsi({
-      deskripsi_mk: rpsData.deskripsi_mk || "",
-      materi_pembelajaran: rpsData.materi_pembelajaran || "",
-      daftar_pustaka: [rpsData.referensi_utama, rpsData.referensi_tambahan]
-        .filter(Boolean)
-        .join("\n\n"),
+      deskripsi_mk: rpsData.deskripsi || "", // rpsData.deskripsi (dari DB) -> deskripsi_mk (di UI)
+      materi_pembelajaran: rpsData.pustaka_utama || "",
+      daftar_pustaka: rpsData.pustaka_pendukung || "",
     });
-    if (rpsData.tim_pengajaran)
-      setTimPengajaran(
-        rpsData.tim_pengajaran
-          .split(",")
-          .map((s, i) => ({ id: i + 1, nama: s.trim() }))
-          .filter((t) => t.nama),
-      );
+
+    // 8. TIM & SYARAT
+    const rawTim = rpsData.nama_penyusun;
+    if (rawTim) {
+      try {
+        // Cek apakah rawTim sudah berupa array atau masih string JSON
+        const parsed = typeof rawTim === "string" ? JSON.parse(rawTim) : rawTim;
+        if (Array.isArray(parsed)) {
+          setTimPengajaran(
+            parsed.map((nama: any, i: number) => ({
+              id: i + 1,
+              nama: typeof nama === "object" ? nama.nama : String(nama),
+            })),
+          );
+        }
+      } catch (e) {
+        // Fallback jika bukan JSON (string biasa dipisah koma)
+        setTimPengajaran(
+          String(rawTim)
+            .split(",")
+            .map((s, i) => ({ id: i + 1, nama: s.trim() })),
+        );
+      }
+    } else {
+      setTimPengajaran([]);
+    }
     if (rpsData.matakuliah_syarat)
       setMkSyarat(
         rpsData.matakuliah_syarat
@@ -1823,24 +2222,30 @@ export default function DetailRPSPage({
           .map((s, i) => ({ id: i + 1, nama: s.trim() }))
           .filter((m) => m.nama),
       );
+
+    // 9. PERTEMUAN
+    // 9. PERTEMUAN (SINKRONISASI DENGAN SCHEMA BARU)
     if (rpsData.pertemuan) {
       setPertemuanRows(
         rpsData.pertemuan.map((p: any) => ({
-          id: uid(),
-          db_id: p.id,
+          id: uid(), // ID sementara untuk render React
+          db_id: p.id, // ID asli dari database
           pekan_mulai: p.pekan_ke,
           pekan_sampai: p.pekan_ke,
-          sub_cpmk_id: String(p.sub_cpmk_id || ""),
-          indikator: p.indikator || "",
-          teknik_kriteria: p.teknik_kriteria || "",
-          luring_bentuk: p.bahan_kajian || "",
-          luring_metode: p.metode_pembelajaran || "",
-          luring_waktu: p.waktu || "",
-          daring_bentuk: p.daring_bentuk || "",
-          daring_metode: p.daring_metode || "",
-          daring_waktu: p.daring_waktu || "",
-          materi: p.materi_pembelajaran || p.pengalaman_belajar || "",
-          bobot: Number(p.bobot_cpmk) || 0,
+          sub_cpmk_id:
+            p.sub_cpmk && p.sub_cpmk.length > 0 ? String(p.sub_cpmk[0].id) : "",
+          indikator: p.kriteria_penilaian || "", // Sesuai schema: kriteria_penilaian
+          teknik_kriteria: "", // Jika Kakak butuh field ini, bisa ditambahkan ke schema nanti
+          teknik_penilaian: "", // Required field from PertemuanRow type
+          kriteria: "", // Required field from PertemuanRow type
+          luring_bentuk: p.bahan_kajian || "", // Sesuai schema: bahan_kajian
+          luring_metode: p.metode_pembelajaran || "", // Sesuai schema: metode_pembelajaran
+          luring_waktu: p.waktu || "", // Sesuai schema: waktu
+          daring_bentuk: "",
+          daring_metode: "",
+          daring_waktu: "",
+          materi: p.pengalaman_belajar || "", // Sesuai schema: pengalaman_belajar
+          bobot: Number(p.bobot_assesment) || 0, // PENTING: Sesuai schema 'bobot_assesment'
         })),
       );
     }
@@ -1863,6 +2268,105 @@ export default function DetailRPSPage({
   );
   const sisaBobot = useMemo(() => Math.max(0, 100 - totalBobot), [totalBobot]);
 
+  // Di dalam Page.tsx
+  const handleUpdateTimPengajaran = async (newTimList: TimDosenItem[]) => {
+    setIsSaving(true);
+    try {
+      // Ubah array object menjadi array string nama saja
+      const timNames = newTimList.map((t) => t.nama);
+
+      const res = await fetch(`/api/rps/${id_rps}?prodiId=${prodiId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          section: "tim_pengajar", // Gunakan penanda section baru
+          data: {
+            tim_pengajaran: JSON.stringify(timNames), // Simpan sebagai string JSON
+          },
+        }),
+      });
+
+      if (res.ok) {
+        setTimPengajaran(newTimList);
+        showSuccess("Tim pengajaran berhasil diperbarui.");
+      }
+    } catch (error) {
+      alert("Gagal memperbarui tim pengajaran");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveDeskripsi = async (formData: DeskripsiLocal) => {
+    setIsSaving(true);
+    try {
+      const res = await fetch(`/api/rps/${id_rps}?prodiId=${prodiId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          section: "deskripsi", // Kita kasih penanda section
+          data: {
+            deskripsi_mk: formData.deskripsi_mk,
+            materi_pembelajaran: formData.materi_pembelajaran,
+            // Pisahkan daftar pustaka jika di DB Kakak kolomnya terpisah (Utama & Tambahan)
+            // Atau simpan ke kolom referensi_utama jika hanya satu kolom
+            referensi_utama: formData.daftar_pustaka,
+          },
+        }),
+      });
+
+      if (res.ok) {
+        // Update state layar agar langsung berubah tanpa refresh
+        setDeskripsi(formData);
+        setShowDeskripsiModal(false);
+        showSuccess("Konten deskriptif berhasil disimpan ke database.");
+
+        // Ambil data terbaru dari server untuk memastikan sinkron
+        await fetchRPSData();
+      } else {
+        throw new Error("Gagal menyimpan ke server");
+      }
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteSubCpmk = async (subId: number) => {
+    // 1. Konfirmasi ke user biar nggak salah klik
+    if (
+      !confirm(
+        "Hapus Sub-CPMK ini? Data yang terhubung di Rencana Mingguan mungkin akan ikut terpengaruh.",
+      )
+    )
+      return;
+
+    setIsSaving(true); // Pakai loading state yang sudah Kakak punya
+    try {
+      const res = await fetch(`/api/rps/sub-cpmk/${subId}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        // 2. SAPU BERSIH: Update state lokal agar langsung hilang dari list
+        setLocalSubCpmk((prev) => prev.filter((s) => s.id !== subId));
+
+        // 3. Refresh data RPS agar sinkron total
+        await fetchRPSData();
+
+        showSuccess("Sub-CPMK berhasil dihapus permanen.");
+      } else {
+        const err = await res.json();
+        throw new Error(err.error || "Gagal menghapus");
+      }
+    } catch (e: any) {
+      alert("Kesalahan: " + e.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // Pertemuan CRUD
   const handleAddPertemuan = useCallback(
     async (form: PertemuanRow) => {
@@ -1873,77 +2377,71 @@ export default function DetailRPSPage({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             rps_id: Number(id_rps),
-            pekan_ke: form.pekan_mulai,
+            pekan_ke: Number(form.pekan_mulai),
             bahan_kajian: form.luring_bentuk,
-            pengalaman_belajar: form.materi,
+            pengalaman_belajar: form.materi, // Materi masuk ke pengalaman_belajar di DB
             waktu: form.luring_waktu,
-            bobot_nilai: form.bobot,
+            bobot_nilai: Number(form.bobot), // API Kakak minta 'bobot_nilai'
             metode_pembelajaran: form.luring_metode,
-            indikator: form.indikator,
-            teknik_kriteria: form.teknik_kriteria,
-            materi_pembelajaran: form.materi,
-            daring_bentuk: form.daring_bentuk,
-            daring_metode: form.daring_metode,
-            daring_waktu: form.daring_waktu,
+            kriteria_penilaian: `${form.teknik_penilaian} | ${form.kriteria} | ${form.indikator}`, // API Kakak minta 'kriteria_penilaian'
             sub_cpmk_id: form.sub_cpmk_id ? Number(form.sub_cpmk_id) : null,
+            // Tambahan agar API tidak error:
+            kemampuan_akhir: form.indikator,
           }),
         });
+
         if (res.ok) {
-          const json = await res.json();
-          setPertemuanRows((prev) => [
-            ...prev,
-            { ...form, id: uid(), db_id: json.data?.id },
-          ]);
+          await fetchRPSData(); // SAPU BERSIH: Ambil data terbaru dari DB
           showSuccess("Pertemuan berhasil ditambahkan.");
-        } else throw new Error("Gagal menyimpan");
+        } else {
+          throw new Error("Gagal menyimpan ke server");
+        }
       } catch (e: any) {
         alert(e.message);
       } finally {
         setIsSaving(false);
       }
     },
-    [id_rps, showSuccess],
+    [id_rps, fetchRPSData, showSuccess],
   );
 
   const handleUpdatePertemuan = useCallback(
     async (form: PertemuanRow) => {
       setIsSaving(true);
       try {
-        if (form.db_id) {
-          const res = await fetch(
-            `/api/rps/pertemuan/${form.db_id}?prodiId=${prodiId}`,
-            {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                pekan_ke: form.pekan_mulai,
-                bahan_kajian: form.luring_bentuk,
-                pengalaman_belajar: form.materi,
-                waktu: form.luring_waktu,
-                bobot_nilai: form.bobot,
-                metode_pembelajaran: form.luring_metode,
-                indikator: form.indikator,
-                teknik_kriteria: form.teknik_kriteria,
-                materi_pembelajaran: form.materi,
-                daring_bentuk: form.daring_bentuk,
-                daring_metode: form.daring_metode,
-                daring_waktu: form.daring_waktu,
-                sub_cpmk_id: form.sub_cpmk_id ? Number(form.sub_cpmk_id) : null,
-              }),
-            },
-          );
-        }
-        setPertemuanRows((prev) =>
-          prev.map((r) => (r.id === form.id ? form : r)),
+        if (!form.db_id) return;
+
+        const res = await fetch(
+          `/api/rps/pertemuan/${form.db_id}?prodiId=${prodiId}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              pekan_ke: Number(form.pekan_mulai),
+              bahan_kajian: form.luring_bentuk,
+              pengalaman_belajar: form.materi,
+              waktu: form.luring_waktu,
+              bobot_assesment: Number(form.bobot), // Sesuai schema model RPSPertemuan
+              metode_pembelajaran: form.luring_metode,
+              kriteria_penilaian: form.indikator,
+              sub_cpmk_id: form.sub_cpmk_id ? Number(form.sub_cpmk_id) : null,
+            }),
+          },
         );
-        showSuccess("Pertemuan berhasil diperbarui.");
+
+        if (res.ok) {
+          await fetchRPSData(); // SAPU BERSIH: Biar data DB masuk ke layar
+          showSuccess("Pertemuan berhasil diperbarui.");
+        } else {
+          throw new Error("Gagal update ke server");
+        }
       } catch (e: any) {
         alert(e.message);
       } finally {
         setIsSaving(false);
       }
     },
-    [prodiId, showSuccess],
+    [prodiId, fetchRPSData, showSuccess],
   );
 
   const handleDeletePertemuan = useCallback(
@@ -2290,28 +2788,114 @@ export default function DetailRPSPage({
         </div>
 
         {/* ===== CPL ===== */}
-        {rpsData.cpl && rpsData.cpl.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm border-2 border-gray-200 overflow-hidden mb-6">
-            <SectionHeader
-              title="CPL-PRODI yang Dibebankan pada MK"
-              icon={<Target size={20} />}
-            />
-            <div className="p-6 space-y-3">
-              {rpsData.cpl.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="flex gap-3 p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
-                  <span className="font-bold text-indigo-700 bg-white border-2 border-indigo-300 px-3 py-1 rounded-lg text-sm whitespace-nowrap h-fit">
-                    {item.kode}
-                  </span>
-                  <p className="text-gray-900 text-sm leading-relaxed font-medium">
-                    {item.deskripsi}
-                  </p>
-                </div>
-              ))}
-            </div>
+        <div className="bg-white rounded-2xl shadow-sm border-2 border-gray-200 overflow-hidden mb-6">
+          <SectionHeader
+            title="CPL-PRODI yang Dibebankan pada MK"
+            icon={<Target size={20} />}
+          />
+          <div className="p-6 bg-gray-50/30">
+            {localCpl && localCpl.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-200 text-gray-800">
+                      <th className="px-3 py-2 text-xs font-bold uppercase border border-gray-400 w-20">
+                        Kode
+                      </th>
+                      <th className="px-3 py-2 text-xs font-bold uppercase border border-gray-400">
+                        Deskripsi
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {localCpl.map((item: any, idx: number) => (
+                      <tr key={idx}>
+                        <td className="px-3 py-2 border border-gray-300">
+                          <span className="font-bold text-white text-xs bg-indigo-600 px-2 py-1 rounded">
+                            {item.kode}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-sm text-gray-900 border border-gray-300">
+                          {item.deskripsi}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-center text-sm text-gray-500 py-4">
+                Belum ada CPL yang dibebankan
+              </p>
+            )}
           </div>
-        )}
+        </div>
+
+        {/* ===== INDIKATOR KINERJA ===== */}
+        <div className="bg-white rounded-2xl shadow-sm border-2 border-gray-200 overflow-hidden mb-6">
+          <SectionHeader
+            title="Indikator Kinerja (IK)"
+            icon={<Award size={20} />}
+          />
+          <div className="p-6 bg-gray-50/30">
+            {localIk && localIk.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-200 text-gray-800">
+                      <th className="px-3 py-2 text-xs font-bold uppercase border border-gray-400 w-20">
+                        Kode
+                      </th>
+                      <th className="px-3 py-2 text-xs font-bold uppercase border border-gray-400">
+                        Deskripsi
+                      </th>
+                      <th className="px-3 py-2 text-xs font-bold uppercase border border-gray-400 w-32">
+                        CPL
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {localIk.map((item: any, idx: number) => (
+                      <tr key={idx}>
+                        <td className="px-3 py-2 border border-gray-300">
+                          <span className="font-bold text-white text-xs bg-emerald-600 px-2 py-1 rounded">
+                            {item.kode}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-sm text-gray-900 border border-gray-300">
+                          {item.deskripsi || "-"}
+                        </td>
+                        <td className="px-3 py-2 border border-gray-300">
+                          <div className="flex flex-wrap gap-1">
+                            {item.cpl_list && item.cpl_list.length > 0 ? (
+                              item.cpl_list.map(
+                                (cpl: string, cplIdx: number) => (
+                                  <span
+                                    key={cplIdx}
+                                    className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 font-semibold">
+                                    {cpl}
+                                  </span>
+                                ),
+                              )
+                            ) : (
+                              <span className="text-xs text-gray-500 italic">
+                                -
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-center text-sm text-gray-500 py-4">
+                Belum ada Indikator Kinerja
+              </p>
+            )}
+          </div>
+        </div>
 
         {/* ===== CPMK ===== */}
         <div className="bg-white rounded-2xl shadow-sm border-2 border-gray-200 overflow-hidden mb-6">
@@ -2340,9 +2924,6 @@ export default function DetailRPSPage({
                       </th>
                       <th className="px-4 py-3 text-xs font-bold text-gray-800 uppercase border border-gray-200">
                         IK
-                      </th>
-                      <th className="px-4 py-3 text-xs font-bold text-gray-800 uppercase border border-gray-200 w-24 text-center">
-                        Bobot
                       </th>
                       <th className="px-4 py-3 text-xs font-bold text-gray-800 uppercase border border-gray-200 w-20 text-center">
                         Aksi
@@ -2454,9 +3035,6 @@ export default function DetailRPSPage({
                           <p className="text-sm text-gray-900 flex-1">
                             {sc.deskripsi}
                           </p>
-                          <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
-                            {sc.bobot}%
-                          </span>
                           <div className="flex gap-1">
                             <button
                               title="Edit"
@@ -2469,14 +3047,19 @@ export default function DetailRPSPage({
                             </button>
                             <button
                               title="Hapus"
-                              onClick={() => {
-                                setLocalSubCpmk((p) =>
-                                  p.filter((s) => s.id !== sc.id),
-                                );
-                                showSuccess("Sub-CPMK dihapus.");
-                              }}
-                              className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
-                              <Trash2 size={14} />
+                              disabled={isSaving} // Cegah klik ganda saat proses hapus
+                              onClick={() => handleDeleteSubCpmk(sc.id)} // Panggil fungsi sakti kita
+                              className={clsx(
+                                "p-1.5 rounded-lg transition-all",
+                                isSaving
+                                  ? "text-gray-400 cursor-not-allowed"
+                                  : "text-red-600 hover:bg-red-50",
+                              )}>
+                              {isSaving ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : (
+                                <Trash2 size={14} />
+                              )}
                             </button>
                           </div>
                         </div>
@@ -2648,21 +3231,22 @@ export default function DetailRPSPage({
         onClose={() => setShowDeskripsiModal(false)}
         data={deskripsi}
         isSaving={isSaving}
-        onSave={(d) => {
-          setDeskripsi(d);
-          setShowDeskripsiModal(false);
-          showSuccess("Konten deskriptif disimpan.");
-        }}
+        onSave={handleSaveDeskripsi}
       />
 
       <TimPengajaranModal
         isOpen={showTimModal}
         onClose={() => setShowTimModal(false)}
         timList={timPengajaran}
-        onAdd={(n) =>
-          setTimPengajaran((p) => [...p, { id: Date.now(), nama: n }])
-        }
-        onDelete={(id) => setTimPengajaran((p) => p.filter((t) => t.id !== id))}
+        dosenList={dosenList} // Pastikan state dosenList ini ada dan terisi data
+        onAdd={(n) => {
+          const newList = [...timPengajaran, { id: Date.now(), nama: n }];
+          handleUpdateTimPengajaran(newList); // Fungsi fetch PUT yang kita buat tadi
+        }}
+        onDelete={(id) => {
+          const newList = timPengajaran.filter((t) => t.id !== id);
+          handleUpdateTimPengajaran(newList); // Fungsi fetch PUT
+        }}
       />
 
       <MKSyaratModal
@@ -2682,39 +3266,121 @@ export default function DetailRPSPage({
         cpmkList={localCpmk}
         subList={localSubCpmk}
         editingItem={editingSubCpmk}
+        onAdd={async (d) => {
+          setIsSaving(true);
+          try {
+            const parentCpmk = localCpmk.find(
+              (c) => c.id === Number(d.cpmk_id),
+            );
+
+            // FIX: Atasi 'parentCpmk is undefined'
+            if (!parentCpmk) {
+              alert("Pilih Parent CPMK terlebih dahulu");
+              return;
+            }
+
+            // FIX: Atasi error property 'id' dengan type casting (as any) atau opsional chaining
+            // Kita ambil IK ID jika prodiId '1', selain itu null
+            const targetIkId =
+              prodiId === "1" ? (parentCpmk.ik?.[0] as any)?.id : null;
+
+            const payload = {
+              cpmk_id: d.cpmk_id,
+              deskripsi: d.deskripsi,
+              ik_id: targetIkId,
+              kode_sub_cpmk: `Sub-${parentCpmk.kode_cpmk}.${
+                localSubCpmk.filter((s) => s.cpmk_id === d.cpmk_id).length + 1
+              }`,
+            };
+
+            const res = await fetch("/api/rps/sub-cpmk", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+
+            if (res.ok) {
+              await fetchRPSData();
+              setShowSubCpmkModal(false);
+              showSuccess("Sub-CPMK berhasil ditambahkan!");
+            }
+          } catch (e) {
+            alert("Terjadi kesalahan sistem.");
+          } finally {
+            setIsSaving(false);
+          }
+        }}
+        onUpdate={async (id, d) => {
+          // SEKARANG ONUPDATE JUGA TEMBAK API BIAR GAK ILANG PAS REFRESH
+          setIsSaving(true);
+          try {
+            const parentCpmk = localCpmk.find(
+              (c) => c.id === Number(d.cpmk_id),
+            );
+            const targetIkId =
+              prodiId === "1" ? (parentCpmk?.ik?.[0] as any)?.id : null;
+
+            const payload = {
+              cpmk_id: Number(d.cpmk_id),
+              deskripsi: d.deskripsi,
+              ik_id: targetIkId,
+              kode_sub_cpmk: editingSubCpmk?.kode || "Sub-CPMK", // Tetap gunakan kode lama
+            };
+
+            const res = await fetch(`/api/rps/sub-cpmk/${id}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+
+            if (res.ok) {
+              await fetchRPSData();
+              setShowSubCpmkModal(false);
+              setEditingSubCpmk(null);
+              showSuccess("Sub-CPMK diperbarui permanen.");
+            }
+          } catch (e) {
+            alert("Gagal memperbarui data.");
+          } finally {
+            setIsSaving(false);
+          }
+        }}
+      />
+
+      <AssessmentModal
+        isOpen={showAssessmentModal}
+        onClose={() => {
+          setShowAssessmentModal(false);
+          setEditingAssessment(null);
+        }}
+        subCpmkList={localSubCpmk}
+        editingItem={editingAssessment}
         onAdd={(d) => {
-          const parent = localCpmk.find((c) => c.id === Number(d.cpmk_id));
-          if (!parent) return;
-          const base = parent.kode_cpmk.replace(/^CPMK[-.]?/i, "");
-          const count = localSubCpmk.filter(
-            (s) => s.cpmk_id === Number(d.cpmk_id),
-          ).length;
-          setLocalSubCpmk((p) => [
+          setAssessments((p) => [
             ...p,
             {
               id: Date.now(),
-              cpmk_id: Number(d.cpmk_id),
-              kode: `Sub-CPMK-${base}.${count + 1}`,
-              deskripsi: d.deskripsi,
-              bobot: d.bobot,
+              sub_cpmk_id: Number(d.sub_cpmk_id),
+              assessment_type: d.assessment_type,
+              bobot: Number(d.bobot),
             },
           ]);
-          showSuccess("Sub-CPMK ditambahkan.");
+          showSuccess("Assessment ditambahkan.");
         }}
         onUpdate={(id, d) => {
-          setLocalSubCpmk((p) =>
-            p.map((s) =>
-              s.id !== id
-                ? s
+          setAssessments((p) =>
+            p.map((a) =>
+              a.id !== id
+                ? a
                 : {
-                    ...s,
-                    deskripsi: d.deskripsi,
-                    bobot: d.bobot,
-                    cpmk_id: Number(d.cpmk_id),
+                    ...a,
+                    sub_cpmk_id: Number(d.sub_cpmk_id),
+                    assessment_type: d.assessment_type,
+                    bobot: Number(d.bobot),
                   },
             ),
           );
-          showSuccess("Sub-CPMK diperbarui.");
+          showSuccess("Assessment diperbarui.");
         }}
       />
 
@@ -2973,11 +3639,11 @@ export default function DetailRPSPage({
                     padding: "7px 8px",
                     fontSize: "11px",
                   }}>
-                  CPL-PRODI yang dibebankan pada MK
+                  CPL yang dibebankan pada MK
                 </td>
               </tr>
-              {rpsData.cpl && rpsData.cpl.length > 0 ? (
-                rpsData.cpl.map((cpl, idx) => (
+              {localCpl && localCpl.length > 0 ? (
+                localCpl.map((cpl, idx) => (
                   <tr key={idx}>
                     <td
                       style={{
@@ -3015,7 +3681,65 @@ export default function DetailRPSPage({
                     padding: "7px 8px",
                     fontSize: "11px",
                   }}>
-                  IK ⇒ Capaian Pembelajaran Mata Kuliah (CPMK)
+                  CPL ⇒ IK
+                </td>
+              </tr>
+              {localCpl && localCpl.length > 0
+                ? localCpl.map((cpl, cplIdx) => {
+                    // Cari semua IK yang terkait dengan CPL ini berdasarkan nomor
+                    const cplNum = String(cpl.kode).match(/\d+/)?.[0];
+                    const relatedIks = localCpmk
+                      .flatMap((cpmk) =>
+                        (cpmk.ik || []).map((ik) => ({ ik, cpmk })),
+                      )
+                      .filter((item) => {
+                        const ikNum = String(item.ik.kode_ik).match(
+                          /^(\d+)[\.\-]/,
+                        )?.[1];
+                        return ikNum === cplNum;
+                      })
+                      .map((item) => item.ik)
+                      .filter(
+                        (value, index, self) =>
+                          self.findIndex((v) => v.kode_ik === value.kode_ik) ===
+                          index,
+                      ); // Unique
+
+                    return relatedIks.length > 0 ? (
+                      <tr key={cplIdx}>
+                        <td
+                          style={{
+                            textAlign: "center",
+                            fontWeight: "bold",
+                            fontSize: "11px",
+                          }}
+                          className="light-gray-cell">
+                          {cpl.kode}
+                        </td>
+                        <td style={{ fontSize: "11px" }}>
+                          {relatedIks.map((ik) => (
+                            <div
+                              key={ik.kode_ik}
+                              style={{ marginBottom: "4px" }}>
+                              <strong>{ik.kode_ik}</strong>: {ik.deskripsi}
+                            </div>
+                          ))}
+                        </td>
+                      </tr>
+                    ) : null;
+                  })
+                : null}
+              <tr>
+                <td
+                  colSpan={2}
+                  className="gray-cell"
+                  style={{
+                    fontWeight: "bold",
+                    textAlign: "center",
+                    padding: "7px 8px",
+                    fontSize: "11px",
+                  }}>
+                  IK ⇒ CPMK
                 </td>
               </tr>
               {localCpmk.map((cpmk, idx) => (
@@ -3047,28 +3771,248 @@ export default function DetailRPSPage({
                   CPMK ⇒ Sub-CPMK
                 </td>
               </tr>
-              {localCpmk.map((cpmk, idx) => (
-                <tr key={idx}>
-                  <td
-                    style={{
-                      textAlign: "center",
-                      fontWeight: "bold",
-                      fontSize: "11px",
-                    }}
-                    className="light-gray-cell">
-                    {cpmk.kode_cpmk}
-                  </td>
-                  <td style={{ fontSize: "11px" }}>
-                    <strong>SUB-{cpmk.kode_cpmk}:</strong>{" "}
-                    {localSubCpmk
-                      .filter((s) => s.cpmk_id === cpmk.id)
-                      .map((s) => s.deskripsi)
-                      .join("; ") || cpmk.deskripsi}
-                  </td>
-                </tr>
-              ))}
+              {localCpmk.map((cpmk, idx) => {
+                // 1. Cari semua Sub-CPMK yang memiliki parent ID yang sama dengan CPMK ini
+                const relatedSubCpmk = localSubCpmk.filter(
+                  (s) => s.cpmk_id === cpmk.id,
+                );
+
+                return (
+                  <tr key={idx} className="border-b border-gray-300">
+                    {/* Kolom CPMK - Menjadi satu kotak untuk semua sub-cpmk di bawahnya */}
+                    <td
+                      style={{
+                        textAlign: "center",
+                        fontWeight: "bold",
+                        fontSize: "11px",
+                        verticalAlign: "top", // Agar teks di atas jika konten sebelah panjang
+                        padding: "8px",
+                      }}
+                      className="light-gray-cell border-r border-gray-300">
+                      {cpmk.kode_cpmk || "-"}
+                    </td>
+
+                    {/* Kolom Sub-CPMK - Menampilkan list kode dan deskripsi gabungan */}
+                    <td style={{ fontSize: "11px", padding: "8px" }}>
+                      {relatedSubCpmk.length > 0 ? (
+                        <div className="flex flex-col gap-2">
+                          {/* Bagian List Deskripsi per Sub-CPMK */}
+                          <ul className="list-disc ml-4 space-y-1">
+                            {relatedSubCpmk.map((s, sIdx) => (
+                              <li key={sIdx}>
+                                <span className="font-semibold">{s.kode}:</span>{" "}
+                                {s.deskripsi}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 italic">
+                          Tidak ada Sub-CPMK
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              <tr>
+                <td
+                  colSpan={2}
+                  className="gray-cell"
+                  style={{
+                    fontWeight: "bold",
+                    textAlign: "center",
+                    padding: "7px 8px",
+                    fontSize: "11px",
+                  }}>
+                  KORELASI ANTARA CPL/IK/CPMK terhadap Sub CPMK & ASESMEN
+                </td>
+              </tr>
             </tbody>
           </table>
+
+          {/* PAGE BREAK 1: Halaman 2 dimulai dari sini */}
+          <div style={{ pageBreakBefore: "always" }} />
+
+          {/* TABEL KORELASI LENGKAP - CPL | IK | CPMK | SUB-CPMK | ASESMEN | BOBOT */}
+          <table className="rps-table mt-8">
+            <thead>
+              <tr>
+                <th rowSpan={2} style={{ width: "10%", fontSize: "10px" }}>
+                  CPL yang
+                  <br />
+                  dibebankan
+                  <br />
+                  pada MK
+                </th>
+                <th rowSpan={2} style={{ width: "8%", fontSize: "10px" }}>
+                  IK
+                </th>
+                <th rowSpan={2} style={{ width: "10%", fontSize: "10px" }}>
+                  CPMK
+                </th>
+                <th rowSpan={2} style={{ width: "12%", fontSize: "10px" }}>
+                  SUB CPMK
+                </th>
+                <th
+                  colSpan={2}
+                  style={{
+                    width: "25%",
+                    textAlign: "center",
+                    fontSize: "10px",
+                  }}>
+                  Bentuk Asesmen
+                </th>
+                <th rowSpan={2} style={{ width: "8%", fontSize: "10px" }}>
+                  Bobot (%)
+                </th>
+                <th rowSpan={2} style={{ width: "17%", fontSize: "10px" }}>
+                  Keterangan
+                </th>
+              </tr>
+              <tr>
+                <th style={{ width: "12.5%", fontSize: "10px" }}>Formative</th>
+                <th style={{ width: "12.5%", fontSize: "10px" }}>Sumative</th>
+              </tr>
+            </thead>
+            <tbody>
+              {localCpmk.length > 0 ? (
+                localCpmk.map((cpmk, cpmkIdx) => {
+                  const subCpmkList = localSubCpmk.filter(
+                    (s) => s.cpmk_id === cpmk.id,
+                  );
+
+                  // Get CPL codes dari rpsData (yang memiliki relasi cpl)
+                  const getCplCodesForPdf = (): string => {
+                    if (!rpsData) return "-";
+                    const rpsDataCpmk = rpsData.cpmk.find(
+                      (c: any) => c.id === cpmk.id,
+                    );
+                    if (!rpsDataCpmk) return "-";
+
+                    // Ambil CPL dari matakuliah yang dibebankan
+                    const matakuliahCpls = (rpsData.matakuliah?.cpl ||
+                      []) as any[];
+                    if (matakuliahCpls.length === 0) return "-";
+
+                    // Cari IK yang terkait dengan CPMK ini
+                    const ikList = ((rpsDataCpmk as any).ik || []) as any[];
+                    if (ikList.length === 0) return "-";
+
+                    // Extract angka pertama dari IK kode
+                    const ikNumbers = new Set<string>();
+                    ikList.forEach((ik: any) => {
+                      const match = String(ik.kode_ik).match(/^(\d+)[\.\-]/);
+                      if (match) ikNumbers.add(match[1]);
+                    });
+
+                    // Cocokkan CPL yang sesuai
+                    const matchedCpls: string[] = [];
+                    matakuliahCpls.forEach((cpl: any) => {
+                      const cplMatch = String(cpl.kode_cpl).match(/\d+/);
+                      if (cplMatch && ikNumbers.has(cplMatch[0])) {
+                        matchedCpls.push(cpl.kode_cpl);
+                      }
+                    });
+
+                    return matchedCpls.length > 0
+                      ? matchedCpls.join(", ")
+                      : "-";
+                  };
+
+                  const ikForCpmk = cpmk.ik?.[0];
+
+                  return (
+                    <tr key={cpmkIdx}>
+                      <td style={{ textAlign: "center", fontSize: "10px" }}>
+                        {getCplCodesForPdf()}
+                      </td>
+                      <td style={{ textAlign: "center", fontSize: "10px" }}>
+                        {ikForCpmk?.kode_ik || "-"}
+                      </td>
+                      <td
+                        style={{
+                          textAlign: "center",
+                          fontSize: "10px",
+                          fontWeight: "bold",
+                        }}>
+                        {cpmk.kode_cpmk}
+                      </td>
+                      <td style={{ fontSize: "10px" }}>
+                        {subCpmkList.length > 0
+                          ? subCpmkList.map((s) => s.kode).join("; ")
+                          : "-"}
+                      </td>
+                      <td
+                        style={{ textAlign: "center", fontSize: "10px" }}></td>
+                      <td
+                        style={{ textAlign: "center", fontSize: "10px" }}></td>
+                      <td
+                        style={{
+                          textAlign: "center",
+                          fontSize: "10px",
+                          fontWeight: "bold",
+                        }}></td>
+                      <td style={{ fontSize: "10px" }}></td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td
+                    colSpan={8}
+                    style={{
+                      textAlign: "center",
+                      fontSize: "10px",
+                      fontStyle: "italic",
+                    }}>
+                    Belum ada data CPMK
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+
+          <table className="rps-table">
+            <tbody>
+              <tr>
+                <td
+                  rowSpan={2}
+                  style={{
+                    width: "15%",
+                    fontWeight: "bold",
+                    textAlign: "center",
+                    verticalAlign: "top",
+                    padding: "10px 8px",
+                    fontSize: "11px",
+                  }}>
+                  Referensi
+                </td>
+                <td
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: "bold",
+                    padding: "6px 8px",
+                    backgroundColor: "#f0f0f0",
+                  }}>
+                  Daftar Pustaka
+                </td>
+              </tr>
+              <tr>
+                <td
+                  style={{
+                    fontSize: "11px",
+                    padding: "6px 8px",
+                    lineHeight: "1.6",
+                  }}
+                  dangerouslySetInnerHTML={{
+                    __html: deskripsi.daftar_pustaka || "-",
+                  }}
+                />
+              </tr>
+            </tbody>
+          </table>
+
           <table className="rps-table">
             <tbody>
               <tr>
@@ -3134,45 +4078,6 @@ export default function DetailRPSPage({
             <tbody>
               <tr>
                 <td
-                  rowSpan={2}
-                  style={{
-                    width: "15%",
-                    fontWeight: "bold",
-                    textAlign: "center",
-                    verticalAlign: "top",
-                    padding: "10px 8px",
-                    fontSize: "11px",
-                  }}>
-                  Referensi
-                </td>
-                <td
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: "bold",
-                    padding: "6px 8px",
-                    backgroundColor: "#f0f0f0",
-                  }}>
-                  Daftar Pustaka
-                </td>
-              </tr>
-              <tr>
-                <td
-                  style={{
-                    fontSize: "11px",
-                    padding: "6px 8px",
-                    lineHeight: "1.6",
-                  }}
-                  dangerouslySetInnerHTML={{
-                    __html: deskripsi.daftar_pustaka || "-",
-                  }}
-                />
-              </tr>
-            </tbody>
-          </table>
-          <table className="rps-table">
-            <tbody>
-              <tr>
-                <td
                   style={{
                     width: "15%",
                     fontWeight: "bold",
@@ -3202,7 +4107,7 @@ export default function DetailRPSPage({
               </tr>
             </tbody>
           </table>
-          <div className="pdf-page" style={{ pageBreakBefore: "always" }}>
+          <div className="pdf-page mt-8" style={{ pageBreakBefore: "always" }}>
             <table className="rps-table">
               <thead>
                 <tr>
@@ -3230,9 +4135,11 @@ export default function DetailRPSPage({
               </thead>
               <tbody>
                 {pertemuanRows.map((p) => {
+                  // Pastikan pencarian menggunakan ID yang konsisten (string ke string)
                   const sub = localSubCpmk.find(
-                    (s) => String(s.id) === p.sub_cpmk_id,
+                    (s) => String(s.id) === String(p.sub_cpmk_id),
                   );
+
                   return (
                     <tr key={p.id}>
                       <td
@@ -3246,13 +4153,24 @@ export default function DetailRPSPage({
                           : `${p.pekan_mulai}–${p.pekan_sampai}`}
                       </td>
                       <td style={{ fontSize: "10px", padding: "6px 8px" }}>
-                        {sub?.kode || "-"}
+                        {/* Tampilkan KODE Sub-CPMK, jika tidak ketemu tampilkan pesan debug kecil */}
+                        {sub ? sub.kode : "-"}
                       </td>
                       <td style={{ fontSize: "10px", padding: "6px 8px" }}>
                         {p.indikator || "-"}
                       </td>
-                      <td style={{ fontSize: "10px", padding: "6px 8px" }}>
-                        {p.teknik_kriteria || "-"}
+                      {/* Di dalam PDF map pertemuanRows */}
+                      <td>
+                        {p.indikator && p.indikator.includes("|") ? (
+                          <>
+                            <strong>Teknik:</strong> {p.indikator.split("|")[0]}{" "}
+                            <br />
+                            <strong>Kriteria:</strong>{" "}
+                            {p.indikator.split("|")[1]}
+                          </>
+                        ) : (
+                          p.indikator
+                        )}
                       </td>
                       <td style={{ fontSize: "10px", padding: "6px 8px" }}>
                         {p.luring_bentuk && (
@@ -3270,10 +4188,7 @@ export default function DetailRPSPage({
                             <strong>Waktu:</strong> {p.luring_waktu}
                           </div>
                         )}
-                        {!p.luring_bentuk &&
-                          !p.luring_metode &&
-                          !p.luring_waktu &&
-                          "-"}
+                        {!p.luring_bentuk && !p.luring_metode && "-"}
                       </td>
                       <td style={{ fontSize: "10px", padding: "6px 8px" }}>
                         {p.daring_bentuk && (
@@ -3291,10 +4206,7 @@ export default function DetailRPSPage({
                             <strong>Waktu:</strong> {p.daring_waktu}
                           </div>
                         )}
-                        {!p.daring_bentuk &&
-                          !p.daring_metode &&
-                          !p.daring_waktu &&
-                          "-"}
+                        {!p.daring_bentuk && !p.daring_metode && "-"}
                       </td>
                       <td style={{ fontSize: "10px", padding: "6px 8px" }}>
                         {p.materi || "-"}
@@ -3305,11 +4217,14 @@ export default function DetailRPSPage({
                           fontWeight: "bold",
                           fontSize: "10px",
                         }}>
-                        {totalBobot}%
+                        {/* PERBAIKAN: Gunakan p.bobot (bobot baris ini), bukan totalBobot */}
+                        {p.bobot}%
                       </td>
                     </tr>
                   );
                 })}
+
+                {/* Baris Total di paling bawah */}
                 <tr>
                   <td
                     colSpan={7}
@@ -3327,6 +4242,7 @@ export default function DetailRPSPage({
                       fontWeight: "bold",
                       fontSize: "10px",
                     }}>
+                    {/* Di sini baru kita tampilkan total akumulasinya */}
                     {totalBobot}%
                   </td>
                 </tr>

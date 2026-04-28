@@ -1,167 +1,63 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
+import { CplService } from "@/services/cpl.service";
 import prisma from "@/../lib/prisma";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { semester_ids } = body;
+    console.log("DEBUG: Payload masuk ke API Prodi:", body);
 
-    const allCPL = await prisma.cPL.findMany({ 
-        orderBy: { kode_cpl: 'asc' },
-        include: { 
-            iks: true,
-            cpmks: true 
-        }
-    });
+    let kId = body.kurikulum_id || body.kurikulumId;
+    const taIdsRaw = body.tahun_ajaran_ids || body.tahunAjaranIds || body.semester_ids;
 
-    const classes = await prisma.kelas.findMany({
-      where: {
-        tahun_ajaran_id: semester_ids?.length > 0 ? { in: semester_ids.map(Number) } : undefined
-      },
-      select: {
-        id: true, matakuliah_id: true, rps_id: true,
-        peserta_kelas: { select: { mahasiswa_id: true } }
-      }
-    });
-
-    const mkGroups: Record<number, Record<number, { classIds: number[], studentCount: number }>> = {};
-    classes.forEach(cls => {
-        if (!cls.matakuliah_id || !cls.rps_id || cls.peserta_kelas.length === 0) return;
-        if (!mkGroups[cls.matakuliah_id]) mkGroups[cls.matakuliah_id] = {};
-        if (!mkGroups[cls.matakuliah_id][cls.rps_id]) mkGroups[cls.matakuliah_id][cls.rps_id] = { classIds: [], studentCount: 0 };
-        mkGroups[cls.matakuliah_id][cls.rps_id].classIds.push(cls.id);
-        mkGroups[cls.matakuliah_id][cls.rps_id].studentCount += cls.peserta_kelas.length;
-    });
-
-    const ikScoresGlobal: Record<number, number[]> = {};   
-    const cpmkScoresGlobal: Record<number, number[]> = {}; 
-
-    for (const mkIdStr in mkGroups) {
-        const rpsDict = mkGroups[mkIdStr];
-
-        const mkIkWeighted: Record<number, { val: number, w: number }> = {};
-        const mkCpmkWeighted: Record<number, { val: number, w: number }> = {}; 
-
-        for (const rpsIdStr in rpsDict) {
-            const rpsData = rpsDict[rpsIdStr];
-            const populasi = rpsData.studentCount;
-
-            const komponenList = await prisma.komponenNilai.findMany({
-                where: { kelas_id: { in: rpsData.classIds } },
-                include: {
-                    cpmk: { include: { sub_cpmk: true } }, 
-                    nilai: true
-                }
-            });
-
-            const componentScores: Record<number, number> = {}; 
-            komponenList.forEach(k => {
-                if (k.nilai.length > 0) {
-                     componentScores[k.id] = k.nilai.reduce((a, b) => a + b.nilai_komponen, 0) / k.nilai.length;
-                }
-            });
-
-            const cpmkRawScores: Record<number, { total: number, bobot: number }> = {};
-            
-            komponenList.forEach(k => {
-                const score = componentScores[k.id];
-                if (score !== undefined) {
-                    if (!cpmkRawScores[k.cpmk_id]) cpmkRawScores[k.cpmk_id] = { total: 0, bobot: 0 };
-                    cpmkRawScores[k.cpmk_id].total += (score * k.bobot_nilai);
-                    cpmkRawScores[k.cpmk_id].bobot += k.bobot_nilai;
-                }
-            });
-
-            const cpmkMap = new Map();
-            komponenList.forEach(k => cpmkMap.set(k.cpmk_id, k.cpmk));
-
-            for (const [cpmkId, data] of Object.entries(cpmkRawScores)) {
-                if (data.bobot === 0) continue;
-                const finalScore = data.total / data.bobot; 
-                const cpmkObj = cpmkMap.get(Number(cpmkId));
-
-                if (cpmkObj?.sub_cpmk) {
-                    cpmkObj.sub_cpmk.forEach((sub: any) => {
-                         if (!mkIkWeighted[sub.ik_id]) mkIkWeighted[sub.ik_id] = { val: 0, w: 0 };
-                         mkIkWeighted[sub.ik_id].val += (finalScore * populasi);
-                         mkIkWeighted[sub.ik_id].w += populasi;
-                    });
-                }
-
-                if (cpmkObj?.cpl_id) {
-                     if (!mkCpmkWeighted[Number(cpmkId)]) mkCpmkWeighted[Number(cpmkId)] = { val: 0, w: 0 };
-                     mkCpmkWeighted[Number(cpmkId)].val += (finalScore * populasi);
-                     mkCpmkWeighted[Number(cpmkId)].w += populasi;
-                }
-            }
-        }
-
-        for (const [id, d] of Object.entries(mkIkWeighted)) {
-            if (!ikScoresGlobal[Number(id)]) ikScoresGlobal[Number(id)] = [];
-            ikScoresGlobal[Number(id)].push(d.val / d.w);
-        }
-        for (const [id, d] of Object.entries(mkCpmkWeighted)) {
-            if (!cpmkScoresGlobal[Number(id)]) cpmkScoresGlobal[Number(id)] = [];
-            cpmkScoresGlobal[Number(id)].push(d.val / d.w);
-        }
+    let taIds: number[] = [];
+    if (Array.isArray(taIdsRaw)) {
+      taIds = taIdsRaw.map(Number).filter(id => !isNaN(id));
+    } else if (taIdsRaw) {
+      taIds = [Number(taIdsRaw)];
     }
 
-    const chartData = allCPL.map(cpl => {
-        const hasIK = cpl.iks && cpl.iks.length > 0;
+    if (!kId) {
+      if (taIds.length > 0) {
+        console.log("DEBUG: kId kosong. Melacak kurikulum dari data jadwal kelas di semester terpilih...");
+        
+        const kelasReferensi = await prisma.kelas.findFirst({
+          where: { tahun_ajaran_id: { in: taIds } },
+          include: { matakuliah: true }
+        });
 
-        if (hasIK) {
-            let totalVal = 0, totalBobot = 0;
-            cpl.iks.forEach(ik => {
-                const scores = ikScoresGlobal[ik.id];
-                if (scores?.length > 0) {
-                    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-                    const weight = scores.length;
-                    totalVal += (avg * weight);
-                    totalBobot += weight;
-                }
-            });
-            return {
-                kode_cpl: cpl.kode_cpl,
-                deskripsi: cpl.deskripsi,
-                nilai_rata_rata: totalBobot > 0 ? parseFloat((totalVal / totalBobot).toFixed(2)) : 0,
-                jumlah_mk_terlibat: totalBobot
-            };
-
-        } else {
-            let totalVal = 0, totalBobot = 0;
-            let countMk = 0;
-
-            cpl.cpmks.forEach(cpmk => {
-                const scores = cpmkScoresGlobal[cpmk.id];
-                if (scores?.length > 0) {
-                    const avgCpmkScore = scores.reduce((a, b) => a + b, 0) / scores.length;
-                    
-                    const bobot = cpmk.bobot_cpmk || 1; 
-
-                    totalVal += (avgCpmkScore * bobot);
-                    totalBobot += bobot;
-                    countMk++;
-                }
-            });
-
-            return {
-                kode_cpl: cpl.kode_cpl,
-                deskripsi: cpl.deskripsi,
-                nilai_rata_rata: totalBobot > 0 ? parseFloat((totalVal / totalBobot).toFixed(2)) : 0,
-                jumlah_mk_terlibat: countMk 
-            };
+        if (kelasReferensi?.matakuliah?.kurikulum_id) {
+          kId = kelasReferensi.matakuliah.kurikulum_id;
+          console.log(`DEBUG: BINGO! Menggunakan Kurikulum ID ${kId} yang dipakai oleh MK: ${kelasReferensi.matakuliah.nama}`);
         }
-    });
+      }
+      
+      if (!kId) {
+        console.log("DEBUG: Tidak ada kelas. Mengambil Kurikulum pertama (terlama) sebagai default...");
+        const defaultKurikulum = await prisma.kurikulum.findFirst({
+          orderBy: { id: 'asc' }, 
+          select: { id: true }
+        });
+        kId = defaultKurikulum?.id;
+      }
+    }
 
-    const uniqueStudents = await prisma.pesertaKelas.findMany({
-        where: { kelas: { tahun_ajaran_id: semester_ids?.length > 0 ? { in: semester_ids.map(Number) } : undefined } },
-        distinct: ['mahasiswa_id'], select: { mahasiswa_id: true }
-    });
+    if (!kId) {
+      return NextResponse.json(
+        { success: false, error: "Sistem gagal menemukan ID Kurikulum." }, 
+        { status: 400 }
+      );
+    }
 
-    return NextResponse.json({ totalMahasiswa: uniqueStudents.length, cplData: chartData });
+    const result = await CplService.getProdiReport(Number(kId), taIds);
 
-  } catch (err: any) {
-    console.error("API Error (CPL Prodi S1/S2):", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ success: true, ...result });
+
+  } catch (error: any) {
+    console.error("CRITICAL ERROR API PRODI:", error);
+    return NextResponse.json(
+      { success: false, error: error.message || "Terjadi kesalahan internal pada server" }, 
+      { status: 500 }
+    );
   }
 }

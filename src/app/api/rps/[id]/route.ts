@@ -1,3 +1,5 @@
+//src/app/api/rps/[id]/route.ts
+
 import { NextResponse, NextRequest } from "next/server";
 import prisma from "@/../lib/prisma";
 
@@ -6,7 +8,6 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    // 1. WAJIB Await params (Standar Next.js 15)
     const { id } = await params;
     const rpsId = parseInt(id);
 
@@ -17,18 +18,27 @@ export async function GET(
       );
     }
 
-    // 2. Fetch Data dengan pengamanan relasi
+    // 2. Fetch Data dengan pengambilan relasi yang TEPAT
     const rps = await prisma.rPS.findUnique({
       where: { id: rpsId },
       include: {
         cpmk: {
-          include: { ik: true },
+          include: { ik: true, sub_cpmk: true },
           orderBy: { kode_cpmk: "asc" },
         },
-        pertemuan: { orderBy: { pekan_ke: "asc" } },
+        pertemuan: {
+          orderBy: { pekan_ke: "asc" },
+          include: { sub_cpmk: true },
+        },
         matakuliah: {
           include: {
-            cpl: { include: { iks: true } },
+            // INI DIA: Ambil IK yang terhubung langsung ke MK (hasil centang matriks)
+            iks: {
+              include: {
+                cpl: true, // Tarik data CPL-nya juga supaya dapet kode_cpl
+              },
+            },
+            cpl: true,
           },
         },
       },
@@ -36,19 +46,16 @@ export async function GET(
 
     if (!rps) {
       return NextResponse.json(
-        { error: "Data RPS tidak ditemukan di database" },
+        { error: "RPS tidak ditemukan" },
         { status: 404 },
       );
     }
 
-    // 3. FIX ERROR 500: Normalisasi Data Json nama_penyusun
-    // Seringkali Prisma mengembalikan data Json dalam bentuk string atau object bertumpuk
+    // 3. Normalisasi nama_penyusun (tetap gunakan logika Kakak yang sudah bagus)
     let finalPenyusun = rps.nama_penyusun;
     try {
-      if (typeof finalPenyusun === "string") {
+      if (typeof finalPenyusun === "string")
         finalPenyusun = JSON.parse(finalPenyusun);
-      }
-      // Jika formatnya {"set": [...]}, ambil isinya
       if (
         finalPenyusun &&
         typeof finalPenyusun === "object" &&
@@ -57,23 +64,21 @@ export async function GET(
         finalPenyusun = (finalPenyusun as any).set;
       }
     } catch (e) {
-      finalPenyusun = rps.nama_penyusun; // fallback
+      finalPenyusun = rps.nama_penyusun;
     }
 
-    // 4. Bangun list Available IKs (Pastikan tidak crash jika cpl null)
+    // 4. Bangun list Available IKs dari RELASI LANGSUNG (Bukan dari CPL lagi)
     const availableIks: any[] = [];
-    if (rps.matakuliah?.cpl && Array.isArray(rps.matakuliah.cpl)) {
-      rps.matakuliah.cpl.forEach((c: any) => {
-        if (c.iks && Array.isArray(c.iks)) {
-          c.iks.forEach((ik: any) => {
-            availableIks.push({
-              id: ik.id,
-              kode: ik.kode_ik,
-              deskripsi: ik.deskripsi,
-              cpl_kode: c.kode_cpl,
-            });
-          });
-        }
+
+    // Kita ambil data dari rps.matakuliah.iks (Hasil Centang Matriks)
+    if (rps.matakuliah?.iks && Array.isArray(rps.matakuliah.iks)) {
+      rps.matakuliah.iks.forEach((ik: any) => {
+        availableIks.push({
+          id: ik.id,
+          kode: ik.kode_ik, // Di frontend kita pakai ik.kode
+          deskripsi: ik.deskripsi,
+          cpl_kode: ik.cpl?.kode_cpl || "CPL", // Ambil dari include cpl tadi
+        });
       });
     }
 
@@ -82,18 +87,14 @@ export async function GET(
       success: true,
       data: {
         ...rps,
-        nama_penyusun: finalPenyusun, // Data sudah dibersihkan
-        available_iks: availableIks,
+        nama_penyusun: finalPenyusun,
+        available_iks: availableIks, // Sekarang isinya hasil centang matriks!
       },
     });
   } catch (err: any) {
-    // Tampilkan error detail di terminal VS Code Kakak
     console.error("CRASH PADA API GET RPS:", err.message);
     return NextResponse.json(
-      {
-        success: false,
-        error: "Terjadi kesalahan internal: " + err.message,
-      },
+      { success: false, error: err.message },
       { status: 500 },
     );
   }
@@ -125,6 +126,23 @@ export async function PUT(
           nama_penyusun: cleanPenyusun || [],
           nama_koordinator: data.nama_koordinator || null,
           nama_kaprodi: data.nama_kaprodi || null,
+        },
+      });
+    } else if (section === "deskripsi") {
+      await prisma.rPS.update({
+        where: { id: Number(id) },
+        data: {
+          // SESUAIKAN DENGAN SCHEMA PRISMA KAKAK:
+          deskripsi: data.deskripsi_mk, // deskripsi_mk di UI masuk ke kolom 'deskripsi'
+          pustaka_utama: data.materi_pembelajaran, // materi_pembelajaran masuk ke 'pustaka_utama' (Cek lagi apakah ini kolom yang benar untuk materi)
+          pustaka_pendukung: data.referensi_utama, // referensi_utama masuk ke 'pustaka_pendukung'
+        },
+      });
+    } else if (section === "tim_pengajar") {
+      await prisma.rPS.update({
+        where: { id: Number(id) },
+        data: {
+          nama_penyusun: data.tim_pengajaran,
         },
       });
     }

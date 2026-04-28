@@ -1,23 +1,17 @@
 "use client";
 
-import { useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState } from "react";
 import { 
   FileText, 
   Printer,
   ChevronRight,
   ChevronLeft,
-  Info,
-  Loader2
+  Info
 } from "lucide-react";
 import DashboardLayout from "@/app/components/DashboardLayout";
 import Link from "next/link";
 
-// 1. KOMPONEN ISI UTAMA (Termasuk Layout masuk ke sini)
-function DokumenContent() {
-  const searchParams = useSearchParams();
-  const prodiId = searchParams.get("prodiId");
-
+export default function DokumenAkreditasiPage() {
   return (
     <DashboardLayout>
       <style jsx global>{`
@@ -131,7 +125,7 @@ function DokumenContent() {
         <div className="no-print mb-6">
           {/* Breadcrumb */}
           <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
-            <Link href={`/rps${prodiId ? `?prodiId=${prodiId}` : ""}`} className="hover:text-indigo-600 transition-colors">
+            <Link href="/rps" className="hover:text-indigo-600 transition-colors">
               RPS
             </Link>
             <ChevronRight size={16} className="text-gray-400" />
@@ -160,7 +154,7 @@ function DokumenContent() {
               </div>
 
               <div className="flex gap-2">
-                <Link href={`/rps${prodiId ? `?prodiId=${prodiId}` : ""}`}>
+                <Link href="/rps">
                   <button className="inline-flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-5 py-2.5 rounded-xl border-2 border-gray-200 hover:border-gray-300 shadow-sm hover:shadow-md transition-all font-semibold group">
                     <ChevronLeft size={18} className="group-hover:-translate-x-1 transition-transform" strokeWidth={2.5} />
                     <span>Kembali</span>
@@ -755,19 +749,5 @@ function DokumenContent() {
         </div>
       </div>
     </DashboardLayout>
-  );
-}
-
-// 2. EXPORT DEFAULT (Bungkus semua ke dalam Suspense)
-export default function DokumenAkreditasiPage() {
-  return (
-    <Suspense fallback={
-      <div className="flex flex-col items-center justify-center min-h-screen gap-3 bg-gray-50">
-        <Loader2 className="animate-spin text-indigo-600" size={40} />
-        <p className="text-gray-500 font-medium">Mempersiapkan dokumen...</p>
-      </div>
-    }>
-      <DokumenContent />
-    </Suspense>
   );
 }
