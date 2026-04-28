@@ -19,7 +19,7 @@ export async function PUT(
         deskripsi: deskripsi,
         cpmk_id: Number(cpmk_id),
         // Logika S2/S3: Jika ik_id tidak ada, set null di database
-        ik_id: ik_id ? Number(ik_id) : null,
+        ik_id: ik_id ? Number(ik_id) : undefined,
         kode_sub_cpmk: kode_sub_cpmk,
       },
     });
