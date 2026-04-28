@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { 
   FileText, 
   Printer,
@@ -11,7 +11,7 @@ import {
 import DashboardLayout from "@/app/components/DashboardLayout";
 import Link from "next/link";
 
-export default function DokumenAkreditasiPage() {
+function DokumenContent() {
   return (
     <DashboardLayout>
       <style jsx global>{`
@@ -120,10 +120,8 @@ export default function DokumenAkreditasiPage() {
         }
       `}</style>
 
-      {/* Navigation & Actions - No Print */}
       <div className="p-6 lg:p-8 bg-gray-50 min-h-screen">
         <div className="no-print mb-6">
-          {/* Breadcrumb */}
           <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
             <Link href="/rps" className="hover:text-indigo-600 transition-colors">
               RPS
@@ -132,7 +130,6 @@ export default function DokumenAkreditasiPage() {
             <span className="font-semibold text-gray-900">Dokumen Akreditasi</span>
           </div>
 
-          {/* Header with Actions */}
           <div className="bg-gradient-to-r from-indigo-50 via-blue-50 to-indigo-50 rounded-2xl p-6 border border-indigo-100/50 shadow-sm mb-6">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div className="flex items-start gap-4 flex-1">
@@ -170,7 +167,6 @@ export default function DokumenAkreditasiPage() {
             </div>
           </div>
 
-          {/* Info Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
               <div className="flex items-center gap-3 mb-3">
@@ -229,7 +225,6 @@ export default function DokumenAkreditasiPage() {
             </div>
           </div>
 
-          {/* Notice */}
           <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-2xl p-5 mb-6">
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -246,10 +241,8 @@ export default function DokumenAkreditasiPage() {
           </div>
         </div>
 
-        {/* Print Area - SEMUA TABEL LENGKAP */}
         <div id="print-area" className="bg-white p-6 rounded-xl shadow-sm">
           
-          {/* Header dengan Logo */}
           <div className="header-box">
             <div className="logo-section">
               <div style={{width: '80px', height: '80px', flexShrink: 0}}>
@@ -276,7 +269,6 @@ export default function DokumenAkreditasiPage() {
             </div>
           </div>
 
-          {/* Tabel Info Mata Kuliah */}
           <table className="rps-table">
             <thead>
               <tr>
@@ -300,7 +292,6 @@ export default function DokumenAkreditasiPage() {
             </tbody>
           </table>
 
-          {/* Tabel Otorisasi */}
           <table className="rps-table">
             <tbody>
               <tr>
@@ -331,10 +322,8 @@ export default function DokumenAkreditasiPage() {
             </tbody>
           </table>
 
-          {/* Tabel Gabungan - Semua Konten */}
           <table className="rps-table">
             <tbody>
-              {/* CPL-PRODI yang dibebankan pada MK */}
               <tr>
                 <td rowSpan={21} style={{width: '15%', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'top', padding: '12px 8px'}}>
                   Capaian<br/>Pembelajaran<br/>Mata Kuliah
@@ -362,7 +351,6 @@ export default function DokumenAkreditasiPage() {
                 </td>
               </tr>
 
-              {/* CPL => Indikator Kinerja */}
               <tr>
                 <td colSpan={2} className="gray-header" style={{fontWeight: 'bold', textAlign: 'center', padding: '8px'}}>
                   CPL ⇒ Indikator Kinerja (IK)
@@ -392,7 +380,6 @@ export default function DokumenAkreditasiPage() {
                 </td>
               </tr>
 
-              {/* IK => CPMK */}
               <tr>
                 <td colSpan={2} className="gray-header" style={{fontWeight: 'bold', textAlign: 'center', padding: '8px'}}>
                   IK ⇒ Capaian Pembelajaran Mata Kuliah (CPMK)
@@ -417,7 +404,6 @@ export default function DokumenAkreditasiPage() {
                 </td>
               </tr>
 
-              {/* CPMK => Sub-CPMK */}
               <tr>
                 <td colSpan={2} className="gray-header" style={{fontWeight: 'bold', textAlign: 'center', padding: '8px'}}>
                   CPMK ⇒ Sub-CPMK
@@ -442,7 +428,6 @@ export default function DokumenAkreditasiPage() {
                 </td>
               </tr>
 
-              {/* Korelasi */}
               <tr>
                 <td colSpan={2} className="gray-header" style={{fontWeight: 'bold', textAlign: 'center', padding: '8px'}}>
                   KORELASI ANTARA CPL/IK/CPMK terhadap Sub CPMK
@@ -451,7 +436,6 @@ export default function DokumenAkreditasiPage() {
             </tbody>
           </table>
 
-          {/* Tabel Korelasi dan Asesmen */}
           <table className="rps-table">
             <thead>
               <tr>
@@ -512,7 +496,6 @@ export default function DokumenAkreditasiPage() {
             </tbody>
           </table>
 
-          {/* Deskripsi Matakuliah */}
           <table className="rps-table">
             <tbody>
               <tr>
@@ -551,7 +534,6 @@ export default function DokumenAkreditasiPage() {
             </tbody>
           </table>
 
-          {/* Referensi */}
           <table className="rps-table">
             <tbody>
               <tr>
@@ -589,7 +571,6 @@ export default function DokumenAkreditasiPage() {
             </tbody>
           </table>
 
-          {/* Tim Pengajaran */}
           <table className="rps-table">
             <tbody>
               <tr>
@@ -611,7 +592,6 @@ export default function DokumenAkreditasiPage() {
             </tbody>
           </table>
 
-          {/* Tabel Rencana Pembelajaran */}
           <table className="rps-table">
             <thead>
               <tr>
@@ -640,7 +620,6 @@ export default function DokumenAkreditasiPage() {
               </tr>
             </thead>
             <tbody>
-              {/* Minggu 1-6 */}
               <tr>
                 <td className="text-center" style={{fontSize: '11px', verticalAlign: 'top'}}>1-6</td>
                 <td style={{fontSize: '11px', padding: '8px'}}>
@@ -673,7 +652,6 @@ export default function DokumenAkreditasiPage() {
                 <td className="text-center" style={{fontSize: '11px', fontWeight: 'bold'}}>30</td>
               </tr>
 
-              {/* Minggu 7-10 */}
               <tr>
                 <td className="text-center" style={{fontSize: '11px', verticalAlign: 'top'}}>7-10</td>
                 <td style={{fontSize: '11px', padding: '8px'}}>
@@ -705,7 +683,6 @@ export default function DokumenAkreditasiPage() {
                 <td className="text-center" style={{fontSize: '11px', fontWeight: 'bold'}}>30</td>
               </tr>
 
-              {/* Minggu 11-16 */}
               <tr>
                 <td className="text-center" style={{fontSize: '11px', verticalAlign: 'top'}}>11-16</td>
                 <td style={{fontSize: '11px', padding: '8px'}}>
@@ -738,7 +715,6 @@ export default function DokumenAkreditasiPage() {
                 <td className="text-center" style={{fontSize: '11px', fontWeight: 'bold'}}>40</td>
               </tr>
 
-              {/* Total Row */}
               <tr>
                 <td colSpan={7}></td>
                 <td className="text-center" style={{fontSize: '11px', fontWeight: 'bold'}}>100</td>
@@ -749,5 +725,13 @@ export default function DokumenAkreditasiPage() {
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+export default function DokumenAkreditasiPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Memuat dokumen...</div>}>
+      <DokumenContent />
+    </Suspense>
   );
 }
