@@ -25,34 +25,46 @@ function HomeContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [isSyncing, setIsSyncing] = useState(true);
+
   // 2. FUNGSI VALIDASI PRODI TERBARU (Paling Penting!)
   useEffect(() => {
     const validateAndSyncProdi = async () => {
       try {
+        // 1. Ambil profil user yang sedang login
         const res = await fetch("/api/auth/profile");
         const result = await res.json();
 
-        if (result.success && result.user.programStudis.length > 0) {
-          // Ambil prodi pertama dari database (S3 jika Kakak login S3)
+        // Cek apakah data user dan programStudis ada
+        if (result.success && result.user?.programStudis?.length > 0) {
+          // Ambil prodi pertama dari relasi user (karena tadi kita seed ke S1)
           const dbProdi = result.user.programStudis[0];
           const urlProdiId = searchParams.get("prodiId");
 
-          // Jika URL kosong atau tidak sama dengan prodi user di database, PAKSA sinkron
+          console.log("DB Prodi ditemukan:", dbProdi.id); // Cek di Console F12
+
+          // 2. SET STATE SEKARANG JUGA (Jangan tunggu router replace)
+          setCurrentProdiId(dbProdi.id);
+          setActiveProdi(dbProdi.id, dbProdi.nama, dbProdi.jenjang);
+
+          // 3. Jika URL tidak sinkron, update URL-nya pelan-pelan
           if (!urlProdiId || parseInt(urlProdiId) !== dbProdi.id) {
-            setActiveProdi(dbProdi.id, dbProdi.nama, dbProdi.jenjang);
-            setCurrentProdiId(dbProdi.id);
             router.replace(`${pathname}?prodiId=${dbProdi.id}`);
-          } else {
-            setCurrentProdiId(parseInt(urlProdiId));
           }
+        } else {
+          console.error("User tidak punya relasi Program Studi di DB");
+          setError("User Anda belum terhubung ke Program Studi manapun.");
         }
       } catch (err) {
         console.error("Gagal sinkron prodi:", err);
+        setError("Gagal memvalidasi profil user.");
+      } finally {
+        setLoading(false); // Matikan loading utama
       }
     };
 
     validateAndSyncProdi();
-  }, [pathname, router]); // Berjalan sekali saat masuk halaman
+  }, [pathname, searchParams, router, setActiveProdi]); // Berjalan sekali saat masuk halaman
 
   // 3. FETCH KURIKULUM berdasarkan currentProdiId yang sudah divalidasi
   const fetchKurikulum = useCallback(async () => {
@@ -81,8 +93,10 @@ function HomeContent() {
   }, [currentProdiId]);
 
   useEffect(() => {
-    fetchKurikulum();
-  }, [fetchKurikulum]);
+    if (currentProdiId) {
+      fetchKurikulum();
+    }
+  }, [currentProdiId, fetchKurikulum]);
 
   return (
     <div className="flex min-h-screen bg-slate-50">
@@ -125,6 +139,12 @@ function HomeContent() {
                 <div>
                   <h2 className="text-xl font-bold text-gray-900">
                     Matriks CPL - Mata Kuliah
+                    {/* Debugging Singkat */}
+                    <div className="text-xs text-gray-400">
+                      Status: {loading ? "Loading..." : "Ready"} | Prodi:{" "}
+                      {currentProdiId || "Belum ada"} | Kurikulum Terdeteksi:{" "}
+                      {kurikulumList.length}
+                    </div>
                   </h2>
                   <p className="text-sm text-gray-600">
                     Pemetaan Indikator Kinerja (IK) terhadap Mata Kuliah Prodi
