@@ -20,6 +20,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import DashboardLayout from "@/app/components/DashboardLayout";
+import MatriksCPLTable from "@/app/components/MatriksCPLTable";
 import * as XLSX from "xlsx";
 import MatakuliahModal from "@/app/components/MatakuliahModal";
 
@@ -93,7 +94,9 @@ export default function MatriksCPLPageAFTER() {
   const [matakuliahList, setMatakuliahList] = useState<MatakuliahCPL[]>([]);
   const [cplList, setCplList] = useState<CPL[]>([]);
   const [kurikulumList, setKurikulumList] = useState<Kurikulum[]>([]);
-  const [selectedKurikulum, setSelectedKurikulum] = useState<Kurikulum | null>(null);
+  const [selectedKurikulum, setSelectedKurikulum] = useState<Kurikulum | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -163,36 +166,6 @@ export default function MatriksCPLPageAFTER() {
       setLoading(false);
     }
   }, [kurikulumId, prodiId]);
-
-  const loadKurikulum = useCallback(async () => {
-    if (!prodiId) return;
-    try {
-      const res = await fetch(`/api/kurikulum?prodiId=${prodiId}`, {
-        cache: "no-store",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.data) {
-          setKurikulumList(data.data);
-          // Set selected kurikulum sesuai dengan kurikulumId dari URL
-          const selected = data.data.find((k: Kurikulum) => k.id === kurikulumId);
-          if (selected) {
-            setSelectedKurikulum(selected);
-          }
-        }
-      }
-    } catch (err: any) {
-      console.error("Gagal load kurikulum:", err.message);
-    }
-  }, [prodiId, kurikulumId]);
-
-  useEffect(() => {
-    loadKurikulum();
-  }, [loadKurikulum]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
 
   const handleExportExcel = () => {
     try {
@@ -380,15 +353,12 @@ export default function MatriksCPLPageAFTER() {
     }
   };
 
-  const semesterGroups = matakuliahList.reduce(
-    (acc, mk) => {
-      const sem = mk.semester || 0;
-      if (!acc[sem]) acc[sem] = [];
-      acc[sem].push(mk);
-      return acc;
-    },
-    {} as { [key: number]: MatakuliahCPL[] },
-  );
+  const semesterGroups = matakuliahList.reduce((acc, mk) => {
+    const sem = mk.semester || 0;
+    if (!acc[sem]) acc[sem] = [];
+    acc[sem].push(mk);
+    return acc;
+  }, {} as { [key: number]: MatakuliahCPL[] });
 
   const sortedSemesters = Object.keys(semesterGroups)
     .map(Number)
@@ -414,7 +384,6 @@ export default function MatriksCPLPageAFTER() {
   return (
     <DashboardLayout>
       <div className="min-h-screen bg-gray-50 p-4 lg:p-5">
-
         {/* HEADER */}
         <div className="bg-blue-50 rounded-xl p-4 mb-4 border border-blue-200">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
@@ -432,9 +401,7 @@ export default function MatriksCPLPageAFTER() {
                     {kurikulumId}
                   </span>{" "}
                   • Prodi ID:{" "}
-                  <span className="font-semibold text-blue-700">
-                    {prodiId}
-                  </span>
+                  <span className="font-semibold text-blue-700">{prodiId}</span>
                 </p>
               </div>
             </div>
@@ -469,14 +436,39 @@ export default function MatriksCPLPageAFTER() {
         {/* STATS CARDS */}
         <div className="grid w-full grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           {[
-            { label: "Mata Kuliah", value: matakuliahList.length, icon: <Layers className="w-7 h-7 text-white" strokeWidth={2} />, bgColor: "bg-blue-600" },
-            { label: "Total CPL", value: sortedCPL.length, icon: <Target className="w-7 h-7 text-white" strokeWidth={2} />, bgColor: "bg-green-600" },
-            { label: "Total IK", value: allIK.length, icon: <CheckCircle className="w-7 h-7 text-white" strokeWidth={2} />, bgColor: "bg-purple-600" },
-            { label: "Total Mapping", value: totalMapping, icon: <Grid3x3 className="w-7 h-7 text-white" strokeWidth={2} />, bgColor: "bg-orange-600" },
+            {
+              label: "Mata Kuliah",
+              value: matakuliahList.length,
+              icon: <Layers className="w-7 h-7 text-white" strokeWidth={2} />,
+              bgColor: "bg-blue-600",
+            },
+            {
+              label: "Total CPL",
+              value: sortedCPL.length,
+              icon: <Target className="w-7 h-7 text-white" strokeWidth={2} />,
+              bgColor: "bg-green-600",
+            },
+            {
+              label: "Total IK",
+              value: allIK.length,
+              icon: (
+                <CheckCircle className="w-7 h-7 text-white" strokeWidth={2} />
+              ),
+              bgColor: "bg-purple-600",
+            },
+            {
+              label: "Total Mapping",
+              value: totalMapping,
+              icon: <Grid3x3 className="w-7 h-7 text-white" strokeWidth={2} />,
+              bgColor: "bg-orange-600",
+            },
           ].map((card, i) => (
-            <div key={i} className="min-w-0 bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow">
+            <div
+              key={i}
+              className="min-w-0 bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow">
               <div className="flex items-center gap-4">
-                <div className={`w-11 h-11 ${card.bgColor} rounded-xl flex items-center justify-center shadow-md`}>
+                <div
+                  className={`w-11 h-11 ${card.bgColor} rounded-xl flex items-center justify-center shadow-md`}>
                   {card.icon}
                 </div>
                 <div>
@@ -505,7 +497,9 @@ export default function MatriksCPLPageAFTER() {
                 <Eye size={14} /> Tampilkan Semua
               </button>
               <button
-                onClick={() => setCollapsedCPL(sortedCPL.map((c) => c.kode_cpl))}
+                onClick={() =>
+                  setCollapsedCPL(sortedCPL.map((c) => c.kode_cpl))
+                }
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200">
                 <EyeOff size={14} /> Sembunyikan Semua
               </button>
@@ -524,8 +518,8 @@ export default function MatriksCPLPageAFTER() {
               onChange={(e) => handleChangeKurikulum(Number(e.target.value))}
               className="w-full md:w-auto px-4 py-2.5 border-2 border-gray-300 rounded-lg text-sm font-semibold text-gray-900 hover:border-blue-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white shadow-sm">
               <option value="" disabled hidden>
-                {selectedKurikulum 
-                  ? `${selectedKurikulum.nama} (${selectedKurikulum.tahun})` 
+                {selectedKurikulum
+                  ? `${selectedKurikulum.nama} (${selectedKurikulum.tahun})`
                   : "-- Pilih Kurikulum --"}
               </option>
               {kurikulumList.map((k) => (
@@ -544,7 +538,9 @@ export default function MatriksCPLPageAFTER() {
         {successMessage && (
           <div className="mb-6 bg-blue-50 border-2 border-blue-200 rounded-xl p-4 flex items-center gap-3">
             <CheckCircle className="w-5 h-5 text-blue-600" strokeWidth={2.5} />
-            <p className="text-sm font-semibold text-blue-800">{successMessage}</p>
+            <p className="text-sm font-semibold text-blue-800">
+              {successMessage}
+            </p>
           </div>
         )}
 
@@ -552,197 +548,29 @@ export default function MatriksCPLPageAFTER() {
           <div className="mb-6 bg-red-50 border-2 border-red-200 rounded-xl p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
             <div className="flex-1">
-              <h4 className="text-sm font-bold text-red-900 mb-1">Terjadi Kesalahan</h4>
+              <h4 className="text-sm font-bold text-red-900 mb-1">
+                Terjadi Kesalahan
+              </h4>
               <p className="text-sm text-red-700">{error}</p>
             </div>
-            <button title="Hapus Error" onClick={() => setError(null)} className="text-red-600 hover:text-red-800">
+            <button
+              title="Hapus Error"
+              onClick={() => setError(null)}
+              className="text-red-600 hover:text-red-800">
               <X className="w-5 h-5" />
             </button>
           </div>
         )}
 
         {/* TABLE SECTION */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="border-b border-gray-100 px-4 py-3 bg-gray-50/70">
-            <p className="text-xs font-semibold text-gray-600">
-              Scroll horizontal pada tabel untuk melihat semua mapping CPL
-            </p>
-          </div>
-          <div
-            className="block w-full max-w-full overflow-x-auto overflow-y-visible table-mapping-scrollbar">
-            {loading ? (
-              <div className="p-20 text-center">
-                <Loader2 className="animate-spin inline text-blue-600 mb-4" size={48} strokeWidth={2.5} />
-                <p className="text-base text-gray-700 font-semibold">Memuat data matriks CPL...</p>
-              </div>
-            ) : (
-              <table
-                className="w-max text-[11px] border-collapse"
-                style={{ minWidth: "900px" }}>
-                <thead className="sticky top-0 z-20">
-                  {/* ROW 1: SEMESTER + BAHAN KAJIAN + CPL HEADERS */}
-                  <tr>
-                    <th
-                      rowSpan={2}
-                      className="border-2 border-white/20 px-4 py-4 text-center font-bold text-white sticky left-0 bg-blue-600 z-30 text-xs"
-                      style={{ width: "100px" }}>
-                      SEMESTER
-                    </th>
-                    <th
-                      rowSpan={2}
-                      className="border-2 border-white/20 px-5 py-4 text-center font-bold text-white sticky left-[100px] bg-blue-600 z-30 text-xs shadow-[4px_0_12px_-2px_rgba(37,99,235,0.3)]"
-                      style={{ minWidth: "300px", width: "300px" }}>
-                      BAHAN KAJIAN <br /> (MATA KULIAH)
-                    </th>
-                    {sortedCPL.map((cpl) => {
-                      const ikCount = collapsedCPL.includes(cpl.kode_cpl)
-                        ? 0
-                        : cpl.iks?.length || 0;
-                      return (
-                        <th
-                          key={cpl.id}
-                          colSpan={ikCount || 1}
-                          className="border-2 border-white/30 px-3 py-5 text-center font-bold text-white text-xs bg-blue-600 whitespace-nowrap">
-                          <div className="flex flex-col items-center gap-2">
-                            <div className="bg-white/20 px-4 py-1.5 rounded-full text-sm font-bold backdrop-blur-sm">
-                              {cpl.kode_cpl}
-                            </div>
-                            <div className="flex items-center gap-2 text-[10px] opacity-80">
-                              <CheckCircle size={11} />
-                              <span>{cpl.iks?.length || 0} IK</span>
-                              <button
-                                onClick={() => toggleCPL(cpl.kode_cpl)}
-                                className="ml-2 hover:bg-white/20 p-1 rounded transition-colors">
-                                {collapsedCPL.includes(cpl.kode_cpl) ? (
-                                  <ChevronRight size={12} />
-                                ) : (
-                                  <ChevronDown size={12} />
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        </th>
-                      );
-                    })}
-                  </tr>
-
-                  {/* ROW 2: IK SUB-HEADERS */}
-                  <tr>
-                    {sortedCPL.map((cpl) => {
-                      if (collapsedCPL.includes(cpl.kode_cpl)) return null;
-                      return (cpl.iks || []).map((ik) => (
-                        <th
-                          key={ik.id}
-                          className="border-2 border-blue-300 px-2 py-4 text-center font-bold text-blue-900 text-[11px] bg-blue-50 transition-colors hover:brightness-95 whitespace-nowrap"
-                          style={{ minWidth: "70px", width: "70px" }}
-                          title={`${cpl.kode_cpl} - ${ik.deskripsi || "No description"}`}>
-                          <div className="flex flex-col items-center gap-1">
-                            <span className="text-sm font-extrabold">
-                              {ik.kode_ik.replace(/^IK\s*/i, "")}
-                            </span>
-                            <span className="text-[8px] opacity-60 uppercase tracking-wider font-semibold">
-                              {cpl.kode_cpl}
-                            </span>
-                            <Info size={11} className="opacity-40 mt-0.5" />
-                          </div>
-                        </th>
-                      ));
-                    })}
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {sortedSemesters.map((semester) => {
-                    const mkInSemester = semesterGroups[semester];
-                    return mkInSemester.map((mk, mkIdx) => (
-                      <tr
-                        key={mk.id}
-                        className={`group transition-colors ${mkIdx % 2 === 0 ? "bg-white" : "bg-blue-50/20"} hover:bg-blue-50/50`}>
-                        {mkIdx === 0 && (
-                          <td
-                            rowSpan={mkInSemester.length}
-                            className="border-2 border-gray-300 px-4 py-4 text-center font-extrabold text-xl text-blue-900 bg-blue-50 sticky left-0 z-20">
-                            {semester === 0 ? "-" : semester}
-                          </td>
-                        )}
-                        <td className={`border-2 border-gray-300 px-4 py-3 sticky left-[100px] z-30 shadow-[4px_0_8px_-2px_rgba(0,0,0,0.08)] ${mkIdx % 2 === 0 ? "bg-white" : "bg-blue-50"} group-hover:bg-blue-100`}>
-                          <div className="font-bold text-[13px] text-gray-900 leading-tight mb-1.5">
-                            {mk.nama}
-                          </div>
-                          <div className="inline-flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200">
-                              {mk.kode_mk}
-                            </span>
-                            <span className="text-[9px] text-gray-500 font-medium">
-                              {mk.sks} SKS
-                            </span>
-                          </div>
-                        </td>
-
-                        {sortedCPL.map((cpl) => {
-                          if (collapsedCPL.includes(cpl.kode_cpl)) return null;
-                          return (cpl.iks || []).map((ik, ikIdx) => {
-                            const isChecked = mk.ik_mapping[ik.kode_ik] || false;
-                            const cellKey = `${mk.id}-${ik.kode_ik}`;
-                            const currentState = cellStates[cellKey] || (isChecked ? "checked" : "idle");
-                            const isFirstIKofCPL = ikIdx === 0;
-                            return (
-                              <td
-                                key={ik.id}
-                                className={`
-                                  relative border-2 px-2 py-3 text-center cursor-pointer transition-all duration-200
-                                  ${isFirstIKofCPL ? "border-l-4 border-l-blue-400" : "border-gray-200"}
-                                  ${currentState === "idle" ? "bg-white hover:bg-blue-50" : ""}
-                                  ${currentState === "hover" ? "bg-blue-50 border-blue-300 shadow-inner" : ""}
-                                  ${currentState === "active" ? "bg-blue-100 scale-95" : ""}
-                                  ${currentState === "checked" ? "bg-blue-100 border-blue-300" : ""}
-                                  ${currentState === "saving" ? "bg-yellow-50 border-yellow-400 animate-pulse" : ""}
-                                  ${currentState === "error" ? "bg-red-50 border-red-400 animate-pulse" : ""}
-                                `}
-                                style={{ minWidth: "72px", width: "72px" }}
-                                onMouseEnter={() =>
-                                  currentState !== "saving" &&
-                                  setCellStates((p) => ({
-                                    ...p,
-                                    [cellKey]: isChecked ? "checked" : "hover",
-                                  }))
-                                }
-                                onMouseLeave={() =>
-                                  currentState !== "saving" &&
-                                  setCellStates((p) => ({
-                                    ...p,
-                                    [cellKey]: isChecked ? "checked" : "idle",
-                                  }))
-                                }
-                                onClick={() =>
-                                  handleCellClick(mk.id, ik.kode_ik, isChecked, cpl.kode_cpl)
-                                }>
-                                <div className="flex items-center justify-center h-12">
-                                  {currentState === "checked" && (
-                                    <CheckCircle
-                                      className="w-6 h-6 text-blue-700 animate-in zoom-in duration-200"
-                                      strokeWidth={2.5}
-                                    />
-                                  )}
-                                  {currentState === "saving" && (
-                                    <Loader2 className="w-5 h-5 text-yellow-600 animate-spin" />
-                                  )}
-                                  {currentState === "error" && (
-                                    <AlertCircle className="w-5 h-5 text-red-600 animate-pulse" />
-                                  )}
-                                </div>
-                              </td>
-                            );
-                          });
-                        })}
-                      </tr>
-                    ));
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
+        <MatriksCPLTable
+          kurikulumId={selectedKurikulum?.id || kurikulumId}
+          prodiId={Number(prodiId) || 0}
+          compactMode={false}
+          maxHeight="max-h-[500px]"
+          showControls={false}
+          onMappingChange={loadData}
+        />
 
         {/* INSTRUCTIONS */}
         {!loading && matakuliahList.length > 0 && allIK.length > 0 && (
@@ -762,7 +590,8 @@ export default function MatriksCPLPageAFTER() {
                         <span className="text-white text-xs font-bold">1</span>
                       </div>
                       <span>
-                        Semua CPL menggunakan <strong>warna biru</strong> yang seragam dan konsisten
+                        Semua CPL menggunakan <strong>warna biru</strong> yang
+                        seragam dan konsisten
                       </span>
                     </li>
                     <li className="flex items-start gap-2.5">
@@ -770,7 +599,8 @@ export default function MatriksCPLPageAFTER() {
                         <span className="text-white text-xs font-bold">2</span>
                       </div>
                       <span>
-                        Gunakan tombol <strong>collapse/expand</strong> (▼/▶) untuk fokus pada CPL tertentu
+                        Gunakan tombol <strong>collapse/expand</strong> (▼/▶)
+                        untuk fokus pada CPL tertentu
                       </span>
                     </li>
                     <li className="flex items-start gap-2.5">
@@ -778,7 +608,8 @@ export default function MatriksCPLPageAFTER() {
                         <span className="text-white text-xs font-bold">3</span>
                       </div>
                       <span>
-                        Klik sel untuk <strong>toggle mapping</strong> IK ke mata kuliah
+                        Klik sel untuk <strong>toggle mapping</strong> IK ke
+                        mata kuliah
                       </span>
                     </li>
                   </ul>
@@ -788,7 +619,9 @@ export default function MatriksCPLPageAFTER() {
                         <span className="text-white text-xs font-bold">4</span>
                       </div>
                       <span>
-                        Status sel: <strong>Putih</strong> (kosong), <strong>Biru</strong> (mapped), <strong>Kuning</strong> (saving)
+                        Status sel: <strong>Putih</strong> (kosong),{" "}
+                        <strong>Biru</strong> (mapped), <strong>Kuning</strong>{" "}
+                        (saving)
                       </span>
                     </li>
                     <li className="flex items-start gap-2.5">
@@ -796,7 +629,8 @@ export default function MatriksCPLPageAFTER() {
                         <span className="text-white text-xs font-bold">5</span>
                       </div>
                       <span>
-                        Hover pada <strong>header IK</strong> untuk melihat deskripsi lengkap indikator
+                        Hover pada <strong>header IK</strong> untuk melihat
+                        deskripsi lengkap indikator
                       </span>
                     </li>
                     <li className="flex items-start gap-2.5">
@@ -804,7 +638,9 @@ export default function MatriksCPLPageAFTER() {
                         <span className="text-white text-xs font-bold">6</span>
                       </div>
                       <span>
-                        Scroll horizontal akan menampilkan <strong>floating indicator</strong> CPL yang sedang dilihat
+                        Scroll horizontal akan menampilkan{" "}
+                        <strong>floating indicator</strong> CPL yang sedang
+                        dilihat
                       </span>
                     </li>
                   </ul>

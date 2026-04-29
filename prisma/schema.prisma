@@ -64,6 +64,7 @@ model MataKuliah {
   rps          RPS[]
   cpl          CPL[]     @relation("CPLToMataKuliah")
   iks          Ik[]      @relation("IkaToMataKuliah")
+  bobotIKs     BobotIK[] 
 
   @@map("mata_kuliah")
 }
@@ -118,6 +119,8 @@ model RPS {
   file_path           String?
   is_locked           Boolean        @default(false)
   createdAt           DateTime       @default(now())
+  judul_rps           String?
+  is_active            Boolean        @default(false)
   deskripsi           String?
   materi_pembelajaran String?
   pustaka_pendukung   String?
@@ -139,6 +142,8 @@ model RPS {
   cpmk                CPMK[]         @relation("CPMKToRPS")
   ikas                Ik[]           @relation("IkaToRPS")
 
+
+  @@index([matakuliah_id, is_active])
   @@map("rps")
 }
 
@@ -167,6 +172,7 @@ model Ik {
   cpmk       CPMK[]       @relation("IkaToCPMK")
   mataKuliah MataKuliah[] @relation("IkaToMataKuliah")
   rps        RPS[]        @relation("IkaToRPS")
+  bobotIKs   BobotIK[]
 
   @@map("ik")
 }
@@ -268,6 +274,20 @@ model PesertaKelas {
 
   @@unique([kelas_id, mahasiswa_id])
   @@map("peserta_kelas")
+}
+
+//Temporary model for IK weight
+model BobotIK {
+  id            Int         @id @default(autoincrement())
+  ik_id         Int
+  matakuliah_id Int?       
+  bobot_ik      Float
+  keterangan    String?    
+  
+  ik            Ik          @relation(fields: [ik_id], references: [id], onDelete: Cascade)
+  mataKuliah    MataKuliah? @relation(fields: [matakuliah_id], references: [id], onDelete: Cascade)
+
+  @@map("bobot_ik")
 }
 
 enum UserRole {
