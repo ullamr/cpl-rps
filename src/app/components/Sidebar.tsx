@@ -246,7 +246,7 @@ export default function Sidebar() {
           </div>
           <div>
             <h1 className="font-extrabold text-2xl text-white tracking-tight">
-              APP-CPL
+              MLOA V2
             </h1>
             <p className="text-xs text-indigo-100 font-medium">
               Sistem Penilaian CPL
