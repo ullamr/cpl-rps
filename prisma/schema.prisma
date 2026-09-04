@@ -22,11 +22,11 @@ model User {
 
 model ProgramStudi {
   id           Int         @id @default(autoincrement())
-  kode_prodi   String      @unique
-  jenjang      Jenjang
   nama         String
   createdAt    DateTime    @default(now())
+  kode_prodi   String      @unique
   updatedAt    DateTime    @updatedAt
+  jenjang      Jenjang
   kurikulum    Kurikulum[]
   users        User[]      @relation("UserToProgramStudi")
   userPrograms User[]      @relation("UserToProgramStudis")
@@ -40,8 +40,8 @@ model Kurikulum {
   tahun         Int
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
-  prodi_id      Int?
   misi          Json?
+  prodi_id      Int?
   visi          String?
   AssasmentArea AssasmentArea[]
   cpl           CPL[]
@@ -52,19 +52,18 @@ model Kurikulum {
 }
 
 model MataKuliah {
-  id           Int       @id @default(autoincrement())
-  kode_mk      String    @unique
+  id           Int        @id @default(autoincrement())
+  kode_mk      String     @unique
   nama         String
   sks          Int
   kurikulum_id Int
   semester     Int
   sifat        String
   kelas        Kelas[]
-  kurikulum    Kurikulum @relation(fields: [kurikulum_id], references: [id])
+  kurikulum    Kurikulum  @relation(fields: [kurikulum_id], references: [id])
   rps          RPS[]
-  cpl          CPL[]     @relation("CPLToMataKuliah")
-  iks          Ik[]      @relation("IkaToMataKuliah")
-  bobotIKs     BobotIK[] 
+  cpl          CPL[]      @relation("CPLToMataKuliah")
+  iks          Ik[]       @relation("IkaToMataKuliah")
 
   @@map("mata_kuliah")
 }
@@ -95,13 +94,13 @@ model Kelas {
   id              Int             @id @default(autoincrement())
   nama_kelas      String
   tahun_ajaran_id Int
-  sks             Int             @default(0)
-  kode_mk         String
-  nama_mk         String
   created_at      DateTime        @default(now())
-  updated_at      DateTime        @updatedAt
+  kode_mk         String
   matakuliah_id   Int?
+  nama_mk         String
   rps_id          Int?
+  sks             Int             @default(0)
+  updated_at      DateTime        @updatedAt
   matakuliah      MataKuliah?     @relation(fields: [matakuliah_id], references: [id])
   rps             RPS?            @relation(fields: [rps_id], references: [id])
   tahun_ajaran    TahunAjaran     @relation(fields: [tahun_ajaran_id], references: [id])
@@ -119,29 +118,28 @@ model RPS {
   file_path           String?
   is_locked           Boolean        @default(false)
   createdAt           DateTime       @default(now())
-  judul_rps           String?
-  is_active            Boolean        @default(false)
   deskripsi           String?
-  materi_pembelajaran String?
-  pustaka_pendukung   String?
-  pustaka_utama       String?
-  updatedAt           DateTime       @updatedAt
+  is_active           Boolean        @default(false)
+  judul_rps           String?
   matakuliah_id       Int
+  materi_pembelajaran String?
   nama_kaprodi        String?
   nama_koordinator    String?
+  nama_penyusun       Json?
   nomor_dokumen       String?
-  tanggal_penyusunan  DateTime       @default(now())
+  pustaka_pendukung   String?
+  pustaka_utama       String?
   semester            Semester?
   tahun               String?
   tahun_ajaran_id     Int?
-  nama_penyusun       Json?
+  tanggal_penyusunan  DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
   kelas               Kelas[]
   matakuliah          MataKuliah     @relation(fields: [matakuliah_id], references: [id])
   tahun_ajaran        TahunAjaran?   @relation(fields: [tahun_ajaran_id], references: [id])
   pertemuan           RPSPertemuan[]
   cpmk                CPMK[]         @relation("CPMKToRPS")
   ikas                Ik[]           @relation("IkaToRPS")
-
 
   @@index([matakuliah_id, is_active])
   @@map("rps")
@@ -172,7 +170,6 @@ model Ik {
   cpmk       CPMK[]       @relation("IkaToCPMK")
   mataKuliah MataKuliah[] @relation("IkaToMataKuliah")
   rps        RPS[]        @relation("IkaToRPS")
-  bobotIKs   BobotIK[]
 
   @@map("ik")
 }
@@ -181,8 +178,8 @@ model CPMK {
   id             Int             @id @default(autoincrement())
   kode_cpmk      String
   is_locked      Boolean         @default(true)
-  deskripsi      String
   bobot_cpmk     Int
+  deskripsi      String
   komponen_nilai KomponenNilai[]
   sub_cpmk       SubCpmk[]
   cpl            CPL[]           @relation("CPMKToCPL")
@@ -210,6 +207,7 @@ model SubCpmk {
 model RPSPertemuan {
   id                  Int       @id @default(autoincrement())
   pekan_ke            Int
+  nama_tugas          String?
   kemampuan_akhir     String?
   bahan_kajian        String?
   metode_pembelajaran String?
@@ -264,8 +262,8 @@ model Mahasiswa {
 model PesertaKelas {
   id                Int       @id @default(autoincrement())
   kelas_id          Int
-  created_at        DateTime  @default(now())
   mahasiswa_id      Int
+  created_at        DateTime  @default(now())
   nilai_akhir_angka Float?
   nilai_akhir_huruf String?
   nilai             Nilai[]
@@ -276,18 +274,11 @@ model PesertaKelas {
   @@map("peserta_kelas")
 }
 
-//Temporary model for IK weight
-model BobotIK {
-  id            Int         @id @default(autoincrement())
-  ik_id         Int
-  matakuliah_id Int?       
-  bobot_ik      Float
-  keterangan    String?    
-  
-  ik            Ik          @relation(fields: [ik_id], references: [id], onDelete: Cascade)
-  mataKuliah    MataKuliah? @relation(fields: [matakuliah_id], references: [id], onDelete: Cascade)
-
-  @@map("bobot_ik")
+model Pdf{
+  id        Int      @id @default(autoincrement())
+  judul     String
+  file_url  String
+  createdAt DateTime @default(now())
 }
 
 enum UserRole {

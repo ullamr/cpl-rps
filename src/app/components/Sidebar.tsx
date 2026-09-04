@@ -378,6 +378,11 @@ export default function Sidebar() {
                 isActive={currentPath.startsWith("/laporan/rekap-metode")}>
                 Rekap Metode
               </SubMenuItem>
+              <SubMenuItem
+                href="/laporan/laporan-pdf"
+                isActive={currentPath === "/laporan/laporan-pdf"}>
+                Laporan PDF
+              </SubMenuItem>
             </CollapsibleMenu>
           </>
         )}
