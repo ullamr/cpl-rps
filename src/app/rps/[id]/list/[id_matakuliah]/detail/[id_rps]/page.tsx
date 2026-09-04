@@ -2132,17 +2132,22 @@ export default function DetailRPSPage({
       ketua_prodi: rpsData.nama_kaprodi || "",
     });
 
-    // 3. SET CPL (Dari relasi Mata Kuliah)
-    if (rpsData.matakuliah?.cpl && Array.isArray(rpsData.matakuliah.cpl)) {
-      setLocalCpl(
-        rpsData.matakuliah.cpl.map((c: any) => ({
-          kode: c.kode_cpl,
-          deskripsi: c.deskripsi,
-        })),
-      );
-    } else {
-      setLocalCpl([]);
-    }
+    // 3. SET CPL dari relasi Mata Kuliah agar deskripsi asli tetap digunakan.
+    const normalizeCode = (value: unknown) =>
+      String(value || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+    const cplByNormalizedCode = new Map<string, CPLItem>();
+
+    (rpsData.matakuliah?.cpl || []).forEach((c: any) => {
+      const kode = String(c.kode_cpl || "").trim();
+      if (kode) {
+        cplByNormalizedCode.set(normalizeCode(kode), {
+          kode,
+          deskripsi: c.deskripsi || "",
+        });
+      }
+    });
 
     // 4. SET INDIKATOR KINERJA (Data centang biru dari Matriks)
     // FIX: Gunakan 'iks' (sesuai API) bukan 'ik'
@@ -2160,22 +2165,32 @@ export default function DetailRPSPage({
       const uniqueCplCodes = Array.from(
         new Set(mappedIks.map((ik) => ik.cpl_list[0])),
       );
-      const mappedCpls = uniqueCplCodes.map((code) => {
-        // Cari deskripsi asli dari data rpsData jika ada
+      uniqueCplCodes.forEach((code) => {
+        const normalizedCode = normalizeCode(code);
         const originalCpl = rpsData.matakuliah?.cpl?.find(
-          (c: any) => c.kode_cpl === code,
+          (c: any) => normalizeCode(c.kode_cpl) === normalizedCode,
         );
-        return {
-          kode: code,
-          deskripsi:
-            originalCpl?.deskripsi || "Capaian Pembelajaran Lulusan terkait",
-        };
+        const sourceIk = rpsData.available_iks.find(
+          (item: any) => normalizeCode(item.cpl_kode) === normalizedCode,
+        );
+        if (!cplByNormalizedCode.has(normalizedCode)) {
+          cplByNormalizedCode.set(normalizedCode, {
+            kode: String(code || "").trim(),
+            deskripsi: originalCpl?.deskripsi || sourceIk?.cpl_deskripsi || "",
+          });
+        }
       });
-      setLocalCpl(mappedCpls);
     } else {
       setLocalIk([]);
-      setLocalCpl([]);
     }
+
+    setLocalCpl(
+      Array.from(cplByNormalizedCode.values()).sort((a, b) => {
+        const firstNumber = Number(a.kode.match(/\d+/)?.[0] ?? Infinity);
+        const secondNumber = Number(b.kode.match(/\d+/)?.[0] ?? Infinity);
+        return firstNumber - secondNumber || a.kode.localeCompare(b.kode, "id");
+      }),
+    );
 
     // 5. SET CPMK (Hubungan CPMK ke IK)
     if (rpsData.cpmk && Array.isArray(rpsData.cpmk)) {
