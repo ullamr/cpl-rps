@@ -8,7 +8,6 @@ import { HiOutlineHome, HiOutlineExclamationTriangle } from "react-icons/hi2";
 import { Grid3x3, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useProdiStore } from "@/store/useProdiStore";
-import { url } from "inspector";
 
 function HomeContent() {
   const searchParams = useSearchParams();
@@ -99,15 +98,15 @@ function HomeContent() {
   }, [currentProdiId, fetchKurikulum]);
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex min-h-screen overflow-x-hidden bg-slate-50">
       {/* SIDEBAR dimasukkan ke sini agar aman dari error useSearchParams */}
       <Sidebar />
 
-      <div className="flex flex-col flex-1 bg-white">
+      <div className="flex min-w-0 flex-1 flex-col bg-white">
         {/* HEADER juga dimasukkan ke sini */}
         <Header />
 
-        <main className="p-8 space-y-6 bg-white">
+        <main className="min-w-0 overflow-x-hidden p-8 space-y-6 bg-white">
           {/* Dashboard Title */}
           <div className="flex items-center gap-2 text-2xl font-bold text-gray-800 border-b border-gray-200 pb-3">
             <HiOutlineHome className="w-6 h-6 text-indigo-600" />

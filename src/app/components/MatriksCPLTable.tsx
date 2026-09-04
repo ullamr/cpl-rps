@@ -75,6 +75,33 @@ const cplDesignSystem: Record<string, any> = {
   "CPL-8": blueTheme,
 };
 
+const compareCplCodes = (first: CPL, second: CPL) => {
+  const firstNumber = Number(first.kode_cpl.match(/\d+/)?.[0] ?? Infinity);
+  const secondNumber = Number(second.kode_cpl.match(/\d+/)?.[0] ?? Infinity);
+
+  return (
+    firstNumber - secondNumber ||
+    first.kode_cpl.localeCompare(second.kode_cpl, "id", {
+      sensitivity: "base",
+    })
+  );
+};
+
+const compareIkCodes = (first: IndikatorKinerja, second: IndikatorKinerja) => {
+  const firstParts = (first.kode_ik.match(/\d+/g) || []).map(Number);
+  const secondParts = (second.kode_ik.match(/\d+/g) || []).map(Number);
+  const length = Math.max(firstParts.length, secondParts.length);
+
+  for (let index = 0; index < length; index += 1) {
+    const difference = (firstParts[index] ?? -1) - (secondParts[index] ?? -1);
+    if (difference !== 0) return difference;
+  }
+
+  return first.kode_ik.localeCompare(second.kode_ik, "id", {
+    sensitivity: "base",
+  });
+};
+
 export default function MatriksCPLTable({
   kurikulumId,
   prodiId,
@@ -99,10 +126,10 @@ export default function MatriksCPLTable({
   const [currentVisibleCPL, setCurrentVisibleCPL] = useState<string>("");
 
   const sortedCPL = [...cplList]
-    .sort((a, b) => (a.urutan || 0) - (b.urutan || 0))
+    .sort(compareCplCodes)
     .map((cpl) => ({
       ...cpl,
-      iks: (cpl.iks || []).sort((a, b) => (a.urutan || 0) - (b.urutan || 0)),
+      iks: (cpl.iks || []).sort(compareIkCodes),
     }));
 
   const allIK: IndikatorKinerja[] = [];
@@ -425,7 +452,7 @@ export default function MatriksCPLTable({
               </p>
             </div>
           ) : (
-            <table className="min-w-full text-[11px] border-collapse">
+            <table className="min-w-full border border-blue-200 text-[11px] border-collapse">
               <thead className="sticky top-0 z-40">
                 <tr>
                   <th
@@ -483,7 +510,16 @@ export default function MatriksCPLTable({
                 </tr>
                 <tr>
                   {sortedCPL.map((cpl) => {
-                    if (collapsedCPL.includes(cpl.kode_cpl)) return null;
+                    if (collapsedCPL.includes(cpl.kode_cpl) || !cpl.iks?.length) {
+                      return (
+                        <th
+                          key={`${cpl.id}-placeholder`}
+                          className="border-2 border-blue-200 bg-gray-50 px-2 py-3 text-center text-[10px] font-semibold text-gray-400"
+                          title={`${cpl.kode_cpl} tidak memiliki IK`}>
+                          -
+                        </th>
+                      );
+                    }
                     return (cpl.iks || []).map((ik) => {
                       const ikNumber = ik.kode_ik.replace(/^IK\s*/i, "");
                       return (
@@ -523,7 +559,7 @@ export default function MatriksCPLTable({
                       {mkIdx === 0 && (
                         <td
                           rowSpan={mkInSemester.length}
-                          className="border-2 border-blue-200 px-2 py-3 text-center align-top font-extrabold text-base text-blue-900 !bg-white sticky left-0 z-30 shadow-none overflow-hidden"
+                          className="border-b border-r border-blue-200 px-2 py-3 text-center align-top font-extrabold text-base text-blue-900 !bg-white sticky left-0 z-30 shadow-none overflow-hidden"
                           style={{
                             width: semesterColWidth,
                             minWidth: semesterColWidth,
@@ -533,7 +569,7 @@ export default function MatriksCPLTable({
                         </td>
                       )}
                       <td
-                        className="border-2 border-blue-200 px-2 py-2 sticky left-0 z-20 shadow-none align-top overflow-hidden !bg-white"
+                        className="border-b border-r border-blue-200 px-2 py-2 sticky left-0 z-20 shadow-none align-top overflow-hidden !bg-white"
                         style={{
                           left: mkColLeft,
                           minWidth: mkColWidth,
@@ -554,7 +590,15 @@ export default function MatriksCPLTable({
                         </div>
                       </td>
                       {sortedCPL.map((cpl) => {
-                        if (collapsedCPL.includes(cpl.kode_cpl)) return null;
+                        if (collapsedCPL.includes(cpl.kode_cpl) || !cpl.iks?.length) {
+                          return (
+                            <td
+                              key={`${mk.id}-${cpl.id}-placeholder`}
+                              className="border-b border-r border-blue-100 bg-gray-50 px-2 py-2 text-center text-gray-300">
+                              -
+                            </td>
+                          );
+                        }
                         const design =
                           cplDesignSystem[cpl.kode_cpl] ||
                           cplDesignSystem["CPL-1"];
@@ -568,7 +612,7 @@ export default function MatriksCPLTable({
                           return (
                             <td
                               key={ik.id}
-                              className={`relative border-2 px-2 py-2 text-center transition-all duration-200
+                              className={`relative border-b border-r border-blue-100 px-2 py-2 text-center transition-all duration-200
                                 ${
                                   isFirstIKofCPL
                                     ? "border-l-4 border-l-blue-400"

@@ -83,6 +83,33 @@ function getCplDesign(_kode: string) {
   return cplDesignSystem["default"];
 }
 
+const compareCplCodes = (first: CPL, second: CPL) => {
+  const firstNumber = Number(first.kode_cpl.match(/\d+/)?.[0] ?? Infinity);
+  const secondNumber = Number(second.kode_cpl.match(/\d+/)?.[0] ?? Infinity);
+
+  return (
+    firstNumber - secondNumber ||
+    first.kode_cpl.localeCompare(second.kode_cpl, "id", {
+      sensitivity: "base",
+    })
+  );
+};
+
+const compareIkCodes = (first: IndikatorKinerja, second: IndikatorKinerja) => {
+  const firstParts = (first.kode_ik.match(/\d+/g) || []).map(Number);
+  const secondParts = (second.kode_ik.match(/\d+/g) || []).map(Number);
+  const length = Math.max(firstParts.length, secondParts.length);
+
+  for (let index = 0; index < length; index += 1) {
+    const difference = (firstParts[index] ?? -1) - (secondParts[index] ?? -1);
+    if (difference !== 0) return difference;
+  }
+
+  return first.kode_ik.localeCompare(second.kode_ik, "id", {
+    sensitivity: "base",
+  });
+};
+
 export default function MatriksCPLPageAFTER() {
   const params = useParams();
   const router = useRouter();
@@ -108,10 +135,10 @@ export default function MatriksCPLPageAFTER() {
   const [showMkModal, setShowMkModal] = useState(false);
 
   const sortedCPL = [...cplList]
-    .sort((a, b) => (a.urutan || 0) - (b.urutan || 0))
+    .sort(compareCplCodes)
     .map((cpl) => ({
       ...cpl,
-      iks: (cpl.iks || []).sort((a, b) => (a.urutan || 0) - (b.urutan || 0)),
+      iks: (cpl.iks || []).sort(compareIkCodes),
     }));
 
   const allIK: IndikatorKinerja[] = [];
