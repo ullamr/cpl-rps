@@ -12,6 +12,7 @@ import {
   Calendar
 } from "lucide-react";
 import DashboardLayout from "@/app/components/DashboardLayout";
+import { sortByText } from "@/../lib/sorting";
 
 // Interface menyesuaikan database Prisma
 interface Dokumen {
@@ -33,6 +34,8 @@ function LaporanPdfContent() {
   const [fileUpload, setFileUpload] = useState<File | null>(null);
   const [judulUpload, setJudulUpload] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+
+  const sortedDokumenList = sortByText(dokumenList, (doc) => doc.judul);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -165,7 +168,7 @@ function LaporanPdfContent() {
                   <p className="text-gray-500 font-medium">Belum ada laporan.</p>
                 </div>
               ) : (
-                dokumenList.map((doc) => (
+                sortedDokumenList.map((doc) => (
                   <div
                     key={doc.id}
                     onClick={() => setPdfTerpilih(doc.file_url)}
