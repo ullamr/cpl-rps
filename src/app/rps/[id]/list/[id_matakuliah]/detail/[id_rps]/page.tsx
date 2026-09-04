@@ -53,6 +53,7 @@ import OtorisasiModal from "@/app/components/detail-rps/OtorisasiModel";
 // ==========================================
 interface PertemuanRow {
   id: string;
+  nama_tugas: string | null;
   pekan_mulai: number;
   pekan_sampai: number;
   sub_cpmk_id: string;
@@ -1066,6 +1067,7 @@ function SubCpmkModal({
 // ==========================================
 const emptyPertemuan = (nextPekan = 1): PertemuanRow => ({
   id: uid(),
+  nama_tugas: null,
   pekan_mulai: nextPekan,
   pekan_sampai: nextPekan,
   sub_cpmk_id: "",
@@ -1183,8 +1185,16 @@ function PertemuanModal({
           });
         }}
         className="space-y-5">
-        {/* Pekan & Bobot */}
-        <div className="grid grid-cols-3 gap-4">
+        {/* Nama, pekan, dan bobot */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <FormField label="Nama Pertemuan / Tugas">
+            <input
+              value={form.nama_tugas || ""}
+              onChange={(e) => set("nama_tugas", e.target.value || null)}
+              placeholder={`Evaluasi Pekan ${form.pekan_mulai}`}
+              className={inputCls}
+            />
+          </FormField>
           <FormField label="Pekan Mulai" required>
             <input
               type="number"
@@ -1678,6 +1688,9 @@ function PertemuanTable({
                   <th rowSpan={2} className={clsx(thCls, "w-16")}>
                     Pertemuan Ke-
                   </th>
+                  <th rowSpan={2} className={clsx(thCls, "w-40")}>
+                    Nama Tugas
+                  </th>
                   <th rowSpan={2} className={clsx(thCls, "w-44")}>
                     Sub CPMK
                     <br />
@@ -1718,7 +1731,7 @@ function PertemuanTable({
                   <th className={clsx(thCls, "w-32")}>Daring</th>
                 </tr>
                 <tr className="bg-gray-100">
-                  {["1", "2", "3", "4", "5", "6", "7", "8", ""].map((n, i) => (
+                  {["1", "2", "3", "4", "5", "6", "7", "8", "9", ""].map((n, i) => (
                     <td
                       key={i}
                       className="border border-gray-300 text-center text-xs font-bold text-gray-500 py-1">
@@ -1753,6 +1766,11 @@ function PertemuanTable({
                             {row.pekan_sampai}
                           </>
                         )}
+                      </td>
+                      <td className={tdCls}>
+                        <span className="font-semibold text-gray-900">
+                          {row.nama_tugas || `Evaluasi Pekan ${row.pekan_mulai}`}
+                        </span>
                       </td>
                       <td className={tdCls}>
                         {sub ? (
@@ -1896,7 +1914,7 @@ function PertemuanTable({
                 })}
                 <tr className="bg-gray-100 border-t-2 border-gray-400">
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className={clsx(
                       tdCls,
                       "text-right font-black text-gray-800 uppercase tracking-wide",
@@ -2230,6 +2248,7 @@ export default function DetailRPSPage({
         rpsData.pertemuan.map((p: any) => ({
           id: uid(), // ID sementara untuk render React
           db_id: p.id, // ID asli dari database
+          nama_tugas: p.nama_tugas || null,
           pekan_mulai: p.pekan_ke,
           pekan_sampai: p.pekan_ke,
           sub_cpmk_id:
@@ -2378,6 +2397,7 @@ export default function DetailRPSPage({
           body: JSON.stringify({
             rps_id: Number(id_rps),
             pekan_ke: Number(form.pekan_mulai),
+            nama_tugas: form.nama_tugas?.trim() || null,
             bahan_kajian: form.luring_bentuk,
             pengalaman_belajar: form.materi, // Materi masuk ke pengalaman_belajar di DB
             waktu: form.luring_waktu,
@@ -2418,6 +2438,7 @@ export default function DetailRPSPage({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               pekan_ke: Number(form.pekan_mulai),
+              nama_tugas: form.nama_tugas?.trim() || null,
               bahan_kajian: form.luring_bentuk,
               pengalaman_belajar: form.materi,
               waktu: form.luring_waktu,
@@ -4114,6 +4135,9 @@ export default function DetailRPSPage({
                   <th rowSpan={2} style={{ width: "6%" }}>
                     Pertemuan Ke-
                   </th>
+                  <th rowSpan={2} style={{ width: "14%" }}>
+                    Nama Tugas
+                  </th>
                   <th rowSpan={2} style={{ width: "16%" }}>
                     Sub CPMK
                   </th>
@@ -4151,6 +4175,9 @@ export default function DetailRPSPage({
                         {p.pekan_mulai === p.pekan_sampai
                           ? p.pekan_mulai
                           : `${p.pekan_mulai}–${p.pekan_sampai}`}
+                      </td>
+                      <td style={{ fontSize: "10px", padding: "6px 8px" }}>
+                        {p.nama_tugas || `Evaluasi Pekan ${p.pekan_mulai}`}
                       </td>
                       <td style={{ fontSize: "10px", padding: "6px 8px" }}>
                         {/* Tampilkan KODE Sub-CPMK, jika tidak ketemu tampilkan pesan debug kecil */}
@@ -4227,7 +4254,7 @@ export default function DetailRPSPage({
                 {/* Baris Total di paling bawah */}
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     style={{
                       textAlign: "right",
                       fontWeight: "bold",

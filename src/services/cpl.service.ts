@@ -16,9 +16,13 @@ export const CplService = {
       include: { 
         iks: {
           include: {
-            bobotIKs: true 
+            _count: {
+              select: {
+                mataKuliah: { where: { kurikulum_id: kurikulumId } }
+              }
+            }
           }
-        } 
+        }
       },
     });
     
@@ -114,13 +118,10 @@ export const CplService = {
           const ikResults = cpl.iks.map(ikMaster => {
             const ikS = classIkFinalScores[ikMaster.id];
             if (ikS === undefined) return null;
-            
-            let bobotSementara = 1; 
-            if ((ikMaster as any).bobotIKs && (ikMaster as any).bobotIKs.length > 0) {
-              bobotSementara = (ikMaster as any).bobotIKs.reduce((acc: number, curr: any) => acc + (curr.bobot_ik || 0), 0);
-            }
 
-            return { ikScore: ikS, bobotIK: bobotSementara };
+            const bobotIK = (ikMaster as any)._count?.mataKuliah || 1;
+
+            return { ikScore: ikS, bobotIK };
           }).filter(Boolean);
           if (ikResults.length > 0) val = calculateFinalCPL(ikResults as any);
         } else {
@@ -193,14 +194,11 @@ export const CplService = {
           
           const avgIkScore = globalIk.scoreSum / globalIk.mkCount;
 
-          let bobotSementara = globalIk.mkCount;
-          if ((ikMaster as any).bobotIKs && (ikMaster as any).bobotIKs.length > 0) {
-            bobotSementara = (ikMaster as any).bobotIKs.reduce((acc: number, curr: any) => acc + (curr.bobot_ik || 0), 0);
-          }
+          const bobotIK = (ikMaster as any)._count?.mataKuliah || 1;
 
           return {
             ikScore: avgIkScore,
-            bobotIK: bobotSementara
+            bobotIK
           };
         }).filter(Boolean);
 

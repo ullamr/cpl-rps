@@ -46,7 +46,7 @@ export const KelasService = {
         if (targetCpmkId) {
           await tx.komponenNilai.create({
             data: {
-              nama: `Evaluasi Pekan ${p.pekan_ke}`,
+              nama: p.nama_tugas?.trim() || `Evaluasi Pekan ${p.pekan_ke}`,
               bobot_nilai: p.bobot_assesment,
               kelas_id: kelasId,
               cpmk_id: targetCpmkId,
